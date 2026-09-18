@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mmadle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mmadle_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-mmadle}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mmadle}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-mmadle}:${POSTGRES_PASSWORD:-mmadle_dev_password}@postgres:5432/${POSTGRES_DB:-mmadle}?sslmode=disable
+      PORT: "8080"
+      ALLOWED_ORIGINS: "http://localhost:3000,http://frontend:3000"
+      GAME_TIMEZONE: ${GAME_TIMEZONE:-UTC}
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:

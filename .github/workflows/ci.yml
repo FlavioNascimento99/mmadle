@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: backend (go)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mmadle
+          POSTGRES_PASSWORD: mmadle_test_password
+          POSTGRES_DB: mmadle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mmadle"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://mmadle:mmadle_test_password@localhost:5432/mmadle_test?sslmode=disable
+      DATABASE_URL: postgres://mmadle:mmadle_test_password@localhost:5432/mmadle_test?sslmode=disable
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Unit tests
+        run: go test ./internal/domain/ ./internal/httpapi/
+      - name: Migrate + seed test database
+        run: |
+          go run ./cmd/api -migrate-only
+          go run ./cmd/importer --seed ./migrations/seed.sql
+      - name: Integration tests (postgres)
+        run: go test ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          working-directory: backend
+
+  frontend:
+    name: frontend (next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8080
