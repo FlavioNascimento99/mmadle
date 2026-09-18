@@ -3,21 +3,31 @@
 -- internal/store uses the same SQL with pgx directly.
 
 -- name: SearchFighters :many
-SELECT f.id, f.name, f.nickname, f.photo_url, d.name AS division, f.nationality
+SELECT f.id, f.name, f.nickname, f.photo_url, f.photo_credit, d.name AS division, f.nationality
 FROM fighters f
 LEFT JOIN fighter_divisions fd ON fd.fighter_id = f.id AND fd.is_current
 LEFT JOIN divisions d ON d.id = fd.division_id
-WHERE f.name ILIKE '%' || $1 || '%'
-   OR COALESCE(f.nickname, '') ILIKE '%' || $1 || '%'
+WHERE ($1::text = 'all' OR d.gender = $1::text)
+  AND (f.name ILIKE '%' || $2 || '%' OR COALESCE(f.nickname, '') ILIKE '%' || $2 || '%')
 ORDER BY f.name ASC
-LIMIT $2;
+LIMIT $3;
+
+-- name: ListFighters :many
+SELECT f.id, f.name, f.nickname, f.photo_url, f.photo_credit, d.name AS division, f.nationality
+FROM fighters f
+LEFT JOIN fighter_divisions fd ON fd.fighter_id = f.id AND fd.is_current
+LEFT JOIN divisions d ON d.id = fd.division_id
+WHERE ($1::text = 'all' OR d.gender = $1::text)
+ORDER BY f.name ASC;
 
 -- name: GameFighterIDs :many
 SELECT f.id
 FROM fighters f
 WHERE EXISTS (
     SELECT 1 FROM fighter_divisions fd
+    JOIN divisions d ON d.id = fd.division_id
     WHERE fd.fighter_id = f.id AND fd.is_current
+      AND ($1::text = 'all' OR d.gender = $1::text)
 )
 AND EXISTS (
     SELECT 1 FROM fights fl
@@ -27,7 +37,7 @@ ORDER BY f.id ASC;
 
 -- name: FighterGameView :one
 SELECT f.id, f.name, f.nickname, f.date_of_birth, f.height_cm, f.nationality,
-       f.wins, f.losses, f.draws, f.no_contests, f.stance, f.photo_url,
+       f.wins, f.losses, f.draws, f.no_contests, f.stance, f.photo_url, f.photo_credit,
        d.name AS division, e.name AS last_event, e.date AS last_event_date
 FROM fighters f
 JOIN fighter_divisions fd ON fd.fighter_id = f.id AND fd.is_current

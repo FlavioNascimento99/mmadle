@@ -16,13 +16,19 @@ import (
 
 // fakeStore is an in-memory FighterStore for handler tests.
 type fakeStore struct {
-	views  map[int]domain.FighterView
-	ids    []int
-	search []store.SearchResult
-	pingOK bool
+	views   map[int]domain.FighterView
+	ids     []int
+	menIDs  []int
+	search  []store.SearchResult
+	roster  []store.SearchResult
+	pingOK  bool
+	gotPool domain.Pool
 }
 
-func (f *fakeStore) GameFighterIDs(ctx context.Context) ([]int, error) {
+func (f *fakeStore) GameFighterIDs(ctx context.Context, pool domain.Pool) ([]int, error) {
+	if pool == domain.PoolMen {
+		return append([]int{}, f.menIDs...), nil
+	}
 	return append([]int{}, f.ids...), nil
 }
 func (f *fakeStore) FighterView(ctx context.Context, id int) (domain.FighterView, error) {
@@ -32,8 +38,13 @@ func (f *fakeStore) FighterView(ctx context.Context, id int) (domain.FighterView
 	}
 	return v, nil
 }
-func (f *fakeStore) SearchFighters(ctx context.Context, q string, limit int) ([]store.SearchResult, error) {
+func (f *fakeStore) SearchFighters(ctx context.Context, pool domain.Pool, q string, limit int) ([]store.SearchResult, error) {
+	f.gotPool = pool
 	return f.search, nil
+}
+func (f *fakeStore) ListFighters(ctx context.Context, pool domain.Pool) ([]store.SearchResult, error) {
+	f.gotPool = pool
+	return f.roster, nil
 }
 func (f *fakeStore) Ping(ctx context.Context) error {
 	if !f.pingOK {
@@ -60,26 +71,37 @@ func testServer() (*Server, time.Time) {
 		2: {ID: 2, Name: "Guesser Fighter", DateOfBirth: dob("1995-05-05"), HeightCm: 180,
 			Nationality: "USA", Wins: 18, Losses: 4, Draws: 0, Division: "Lightweight",
 			LastEvent: "UFC 319", LastEventDate: dob("2025-08-16")},
+		3: {ID: 3, Name: "Men Target", DateOfBirth: dob("1990-01-01"), HeightCm: 190,
+			Nationality: "Georgia", Wins: 17, Losses: 0, Draws: 0, Division: "Featherweight",
+			LastEvent: "UFC 320", LastEventDate: dob("2025-10-04")},
 	}
 	st := &fakeStore{
-		views: views,
-		ids:   []int{1, 2},
+		views:  views,
+		ids:    []int{1, 2, 3},
+		menIDs: []int{2, 3},
 		search: []store.SearchResult{
 			{ID: 2, Name: "Guesser Fighter", Nationality: "USA"},
 		},
+		roster: []store.SearchResult{
+			{ID: 2, Name: "Guesser Fighter", Nationality: "USA"},
+			{ID: 1, Name: "Target Fighter", Nationality: "Brazil"},
+		},
 		pingOK: true,
 	}
-	srv := New(st, fixedSelector{target: 1}, fixedClock{t: gameDate}, nil)
+	srv := New(st, fixedSelector{targets: []int{1, 3}}, fixedClock{t: gameDate}, nil)
 	return srv, gameDate
 }
 
-// fixedSelector pins the daily target for deterministic handler tests.
-type fixedSelector struct{ target int }
+// fixedSelector pins the daily target for deterministic handler tests: the
+// first preferred id present in the pool (1 for all fighters, 3 for men).
+type fixedSelector struct{ targets []int }
 
 func (f fixedSelector) Select(_ time.Time, ids []int) (int, error) {
-	for _, id := range ids {
-		if id == f.target {
-			return id, nil
+	for _, target := range f.targets {
+		for _, id := range ids {
+			if id == target {
+				return id, nil
+			}
 		}
 	}
 	return 0, domain.ErrNoFighters
@@ -121,6 +143,50 @@ func TestSearchValidation(t *testing.T) {
 		if rec.Code != want {
 			t.Fatalf("%s: status=%d want %d", path, rec.Code, want)
 		}
+	}
+}
+
+func TestListFighters(t *testing.T) {
+	srv, _ := testServer()
+	req := httptest.NewRequest(http.MethodGet, "/api/fighters", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler("").ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var roster []store.SearchResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &roster); err != nil {
+		t.Fatal(err)
+	}
+	if len(roster) != 2 {
+		t.Fatalf("expected full roster, got %d", len(roster))
+	}
+	// Roster uses the minimal search payload: no game attributes may leak.
+	for _, leak := range []string{"date_of_birth", "height", "wins", "last_event"} {
+		if strings.Contains(rec.Body.String(), leak) {
+			t.Fatalf("roster must not expose %q: %s", leak, rec.Body.String())
+		}
+	}
+}
+
+func TestListFightersEmptyIsArray(t *testing.T) {
+	srv, _ := testServer()
+	srv.Store.(*fakeStore).roster = nil
+	req := httptest.NewRequest(http.MethodGet, "/api/fighters", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler("").ServeHTTP(rec, req)
+	if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
+		t.Fatalf("empty roster must encode as [], got %s", got)
+	}
+}
+
+func TestListFightersRejectsPost(t *testing.T) {
+	srv, _ := testServer()
+	req := httptest.NewRequest(http.MethodPost, "/api/fighters", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler("").ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d want 405", rec.Code)
 	}
 }
 

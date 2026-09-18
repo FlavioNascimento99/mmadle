@@ -124,31 +124,37 @@ docker compose up --build -d postgres
 # then migrate + seed as above
 ```
 
-## Deploying the frontend to Cloudflare Pages
+## Deploying to Cloudflare Workers
 
-The game UI is fully client-rendered, so it can be published as static files.
-Set `STATIC_EXPORT=1` during the Pages build to emit `out/` instead of the
-Docker `standalone` server build.
+One Worker (`wrangler.jsonc`, `worker/index.ts`) serves the whole app:
 
-In the Cloudflare Pages dashboard (connect the `mmadle` repo):
+- **Frontend** — `next build` emits a static export (`frontend/out`) that is
+  served as Workers static assets. `NEXT_PUBLIC_API_URL` is left unset, so the
+  UI calls the API same-origin.
+- **Backend** — requests to `/api/*` run the Worker first, which forwards them
+  to the Go image (`backend/Dockerfile`) running as a Cloudflare Container.
+  Migrations run on container boot; the container sleeps after 10 idle
+  minutes, so the first request after that takes a few seconds to wake it.
 
-| Setting                 | Value                          |
-| ----------------------- | ------------------------------ |
-| Root directory          | `frontend`                     |
-| Build command           | `npm run build`                |
-| Build output directory  | `out`                          |
-| `STATIC_EXPORT`         | `1`                            |
-| `NEXT_PUBLIC_API_URL`   | URL of your deployed Go backend|
+Deploys happen through Workers Builds (Git integration, repo root, default
+`npx wrangler deploy`) or locally with `npm install && npx wrangler deploy`
+from the repo root (requires Docker to build the image).
 
-Notes:
+The only secret is the Postgres URL (any Postgres 16+ with `pg_trgm`):
 
-- Pages hosts the frontend only. Deploy the Go backend separately (any VPS /
-  Fly.io / Render host that runs Docker or the `./api` binary with
-  `DATABASE_URL`), then point `NEXT_PUBLIC_API_URL` at it.
-- `NEXT_PUBLIC_*` values are baked in at build time: changing the backend URL
-  requires a Pages rebuild (Retry deployment).
-- Docker Compose is unaffected: without `STATIC_EXPORT` the app still builds
-  in `standalone` mode for `next start`.
+```bash
+npx wrangler secret put DATABASE_URL
+```
+
+Seed a fresh database once by running the importer against it:
+
+```bash
+docker build -t mmadle-api backend
+docker run --rm -e DATABASE_URL=... mmadle-api /app/importer --seed /app/migrations/seed.sql
+```
+
+Docker Compose is unaffected: the frontend image sets `NEXT_OUTPUT=standalone`
+to build the `next start` server instead of the static export.
 
 ## Environment variables
 
@@ -161,7 +167,7 @@ See `.env.example`. Summary:
 | `ALLOWED_ORIGINS`    | backend | `http://localhost:3000`                  |
 | `GAME_TIMEZONE`      | backend | `UTC`                                    |
 | `MIGRATIONS_DIR`     | backend | `migrations` (`/app/migrations` in Docker) |
-| `NEXT_PUBLIC_API_URL`| frontend| `http://localhost:8080`                  |
+| `NEXT_PUBLIC_API_URL`| frontend| unset (same-origin); `http://localhost:8080` in `next dev` |
 | `TEST_DATABASE_URL`  | backend tests | postgres URL for integration tests |
 
 ## Migrations
@@ -175,15 +181,24 @@ on startup and tracked in `schema_migrations`:
 - `004_create_fighter_divisions.sql` — many-to-many + `is_current` flag
 - `005_create_events_fights.sql` — events + fights (last event is derived)
 - `006_create_indexes.sql` — trigram/B-tree indexes
+- `007_add_fighter_photo_credit.sql` — mandatory attribution whenever a photo is set
 - `seed.sql` — demo dataset (applied separately, see below)
 
 ## Seed / data import
 
 `backend/cmd/importer` is the **ingestion boundary**: the API never scrapes or
-imports data at request time. Today it applies `migrations/seed.sql` (16 demo
-fighters, 13 events, 13 fights — enough to play). It is designed to be replaced
-by a pipeline consuming a real MMA/UFC source; only this command and the SQL
-files change, not the runtime.
+imports data at request time. Today it applies `migrations/seed.sql` (67
+fighters across 11 divisions, 36 events, 59 fights; every fighter is eligible as
+a daily target). The seed is idempotent, so re-running it on an existing
+database updates the data in place. It is designed to be replaced by a pipeline
+consuming a real MMA/UFC source; only this command and the SQL files change,
+not the runtime.
+
+Fighter photos are free-licensed Wikimedia Commons images (public domain,
+CC0, CC BY, CC BY-SA), picked from each fighter's English Wikipedia lead image
+and hotlinked from Wikimedia. Each one is stored with its author and licence in
+`photo_credit`. The UI shows the credit in the photo tooltip and under the
+winner's portrait. Fighters without a free photo get an initials fallback.
 
 ## API endpoints
 
@@ -191,6 +206,7 @@ files change, not the runtime.
 | ------ | ----------------------- | -------------------------------------------------- |
 | GET    | `/api/health`           | `{"status":"ok"}` (503 if DB unreachable)          |
 | GET    | `/api/game/today`       | `{"date":"2026-09-18","status":"playing"}` — never reveals the target |
+| GET    | `/api/fighters`         | full roster, alphabetical, same minimal fields as search |
 | GET    | `/api/fighters/search?q=` | case-insensitive partial match, max 8 results, minimal fields |
 | POST   | `/api/game/guess`       | `{"fighter_id": 8}` → structured comparison (see below) |
 
@@ -254,7 +270,7 @@ npm run lint && npm run typecheck && npm run build
 
 ## Future extension points
 
-Stance is already stored; reach, last-fight result, UFC fight count, photos,
+Stance is already stored; reach, last-fight result, UFC fight count,
 streaks/leaderboards, shareable results, auth, and non-UFC organizations can be
 added as new `domain` result fields + view columns without rewriting the
 comparison core.

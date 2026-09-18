@@ -140,6 +140,29 @@ func TestEvaluateGuess_Mixed(t *testing.T) {
 	}
 }
 
+func TestEvaluateGuess_CarriesGuessPhotoOnly(t *testing.T) {
+	gameDate := date("2026-09-18")
+	targetURL, targetCredit := "https://example.org/target.jpg", "Target Author / CC BY 3.0"
+	guessURL, guessCredit := "https://example.org/guess.jpg", "Guess Author / CC0"
+	target := view("", "Target", "1987-07-07", 185, "Lightweight", "Brazil", "UFC 320", 23, 5, 0, 0)
+	target.PhotoURL, target.PhotoCredit = &targetURL, &targetCredit
+	guess := view("", "Guess", "1995-05-05", 180, "Lightweight", "USA", "UFC 319", 18, 4, 0, 0)
+	guess.PhotoURL, guess.PhotoCredit = &guessURL, &guessCredit
+
+	out := EvaluateGuess(target, guess, gameDate)
+	if out.PhotoURL == nil || *out.PhotoURL != guessURL {
+		t.Fatalf("outcome must carry the guessed fighter's photo, got %v", out.PhotoURL)
+	}
+	if out.PhotoCredit == nil || *out.PhotoCredit != guessCredit {
+		t.Fatalf("outcome must carry the guessed fighter's photo credit, got %v", out.PhotoCredit)
+	}
+
+	guess.PhotoURL, guess.PhotoCredit = nil, nil
+	if out := EvaluateGuess(target, guess, gameDate); out.PhotoURL != nil || out.PhotoCredit != nil {
+		t.Fatal("a guess without a photo must never fall back to the target's photo")
+	}
+}
+
 func TestEvaluateGuess_NCRecord(t *testing.T) {
 	gameDate := date("2026-09-18")
 	a := view("", "A", "1990-01-01", 180, "Lightweight", "Brazil", "UFC 320", 22, 6, 0, 1)

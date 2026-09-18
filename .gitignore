@@ -23,3 +23,7 @@
 
 # Docker
 postgres-data/
+
+# Cloudflare Worker
+/node_modules/
+/.wrangler/

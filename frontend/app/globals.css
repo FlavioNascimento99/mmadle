@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #09090b;
+@layer base {
+  body {
+    @apply bg-ink font-body text-bone antialiased;
+  }
+
+  :focus-visible {
+    @apply outline outline-3 outline-offset-2 outline-blood;
+  }
+}
+
+@layer components {
+  /* Neo-brutalist press: the element drops onto its hard shadow. */
+  .press {
+    @apply transition-[transform,box-shadow] duration-100 hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none disabled:pointer-events-none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }

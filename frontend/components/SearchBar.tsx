@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { searchFighters, type SearchResult } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { searchFighters, type Pool, type SearchResult } from "@/lib/api";
+import { useClickOutside } from "@/lib/useClickOutside";
+import { FighterOption } from "./FighterOption";
 
 type Props = {
+  pool: Pool;
   disabled: boolean;
   guessedIds: Set<number>;
   onSelect: (fighter: SearchResult) => void;
 };
 
-export function SearchBar({ disabled, guessedIds, onSelect }: Props) {
+export function SearchBar({ pool, disabled, guessedIds, onSelect }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -27,7 +30,7 @@ export function SearchBar({ disabled, guessedIds, onSelect }: Props) {
     setLoading(true);
     timer.current = setTimeout(async () => {
       try {
-        setResults(await searchFighters(query.trim()));
+        setResults(await searchFighters(query.trim(), pool));
         setOpen(true);
       } finally {
         setLoading(false);
@@ -36,17 +39,10 @@ export function SearchBar({ disabled, guessedIds, onSelect }: Props) {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [query]);
+  }, [query, pool]);
 
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(boxRef, close);
 
   const pick = (f: SearchResult) => {
     onSelect(f);
@@ -68,11 +64,11 @@ export function SearchBar({ disabled, guessedIds, onSelect }: Props) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
-        placeholder={disabled ? "Game complete — come back tomorrow!" : "🔎 Search fighter... (e.g. Topuria)"}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:border-red-500 focus:outline-none disabled:opacity-50"
+        placeholder={disabled ? "Solved for today" : "Search fighters"}
+        className="w-full border-3 border-ink bg-bone px-4 py-3.5 text-lg font-semibold text-ink shadow-blood placeholder:font-normal placeholder:text-ink/50 focus-visible:shadow-hard focus-visible:outline-blood disabled:opacity-50"
       />
       {loading && (
-        <p className="mt-1 text-xs text-zinc-500" role="status">
+        <p className="mt-2 text-xs text-steel" role="status">
           Searching…
         </p>
       )}
@@ -80,42 +76,15 @@ export function SearchBar({ disabled, guessedIds, onSelect }: Props) {
         <ul
           role="listbox"
           aria-label="Matching fighters"
-          className="absolute z-10 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl"
+          className="absolute z-10 mt-2 max-h-80 w-full overflow-auto border-3 border-ink bg-bone shadow-blood-lg"
         >
-          {results.map((f) => {
-            const already = guessedIds.has(f.id);
-            return (
-              <li key={f.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected="false"
-                  disabled={already}
-                  onClick={() => pick(f)}
-                  className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-zinc-800 disabled:opacity-40"
-                >
-                  <span>
-                    <span className="block font-medium text-zinc-100">
-                      {f.name}
-                      {already ? " (guessed)" : ""}
-                    </span>
-                    <span className="block text-xs text-zinc-400">
-                      {[f.nickname && `“${f.nickname}”`, f.division, f.nationality]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </span>
-                  <span aria-hidden="true" className="text-zinc-500">
-                    →
-                  </span>
-                </button>
-              </li>
-            );
-          })}
+          {results.map((f) => (
+            <FighterOption key={f.id} fighter={f} guessed={guessedIds.has(f.id)} onPick={pick} />
+          ))}
         </ul>
       )}
       {open && query.trim().length >= 2 && !loading && results.length === 0 && (
-        <p className="mt-1 text-xs text-zinc-500">No fighters match “{query}”.</p>
+        <p className="mt-2 text-xs text-steel">No fighters match “{query}”. Try a first or last name, or browse all fighters.</p>
       )}
     </div>
   );

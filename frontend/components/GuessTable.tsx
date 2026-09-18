@@ -1,5 +1,6 @@
 import type { Comparison, GuessOutcome } from "@/lib/api";
 import { comparisonMeta } from "@/lib/game";
+import { FighterPhoto } from "./FighterPhoto";
 
 function Cell({
   label,
@@ -17,69 +18,78 @@ function Cell({
     <div
       role="cell"
       aria-label={`${label}: ${display}, ${meta.label}`}
-      title={`${label}: ${meta.label}`}
-      className={`flex min-w-0 flex-col items-center gap-0.5 rounded-lg border px-2 py-2 text-center ${meta.classes}`}
+      title={`${label}: ${display} (${meta.label})`}
+      className={`flex min-w-0 flex-col justify-between gap-1 border-2 border-ink p-2 ${meta.classes}`}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
-        {label}
-      </span>
-      <span className="truncate text-sm font-bold">{display}</span>
-      <span className="text-xs font-medium" aria-hidden="true">
-        {meta.symbol} {comparison === "correct" ? "✓" === meta.symbol ? "match" : "" : hint ?? meta.label}
+      <span className="text-[11px] font-semibold opacity-80">{label}</span>
+      <span className="truncate font-display text-lg leading-tight">{display}</span>
+      <span className="text-xs font-bold" aria-hidden="true">
+        {meta.symbol} {hint ?? (comparison === "correct" ? "match" : "no match")}
       </span>
     </div>
   );
 }
 
+const orderedHint = (comparison: Comparison, up: string, down: string) =>
+  comparison === "higher" ? up : comparison === "lower" ? down : undefined;
+
 export function GuessTable({ guesses }: { guesses: GuessOutcome[] }) {
   if (guesses.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400">
-        No guesses yet. Search a fighter above to start today&apos;s game.
+      <div className="border-3 border-dashed border-bone/40 p-8 text-center text-sm text-steel">
+        No guesses yet. Search for a fighter above to throw your first guess.
       </div>
     );
   }
   return (
-    <div className="space-y-3" role="table" aria-label="Guess history">
-      {[...guesses].reverse().map((g) => (
-        <div
-          key={`${g.fighter_id}-${guesses.indexOf(g)}`}
-          role="row"
-          className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
-        >
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="truncate font-bold text-zinc-50">
-              <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-700 text-xs">
-                {guesses.indexOf(g) + 1}
-              </span>
-              {g.fighter_name}
-            </p>
-            {g.correct && (
-              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-bold text-emerald-300">
-                ✓ Correct!
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6" role="rowgroup">
-            <Cell
-              label="Age"
-              display={`${g.results.age.value}`}
-              comparison={g.results.age.comparison}
-              hint={g.results.age.comparison === "higher" ? "↑ older" : g.results.age.comparison === "lower" ? "↓ younger" : "match"}
-            />
-            <Cell label="Division" display={g.results.division.value} comparison={g.results.division.comparison} />
-            <Cell
-              label="Height"
-              display={`${g.results.height.value} cm`}
-              comparison={g.results.height.comparison}
-              hint={g.results.height.comparison === "higher" ? "↑ taller" : g.results.height.comparison === "lower" ? "↓ shorter" : "match"}
-            />
-            <Cell label="Record" display={g.results.record.value} comparison={g.results.record.comparison} />
-            <Cell label="Nation" display={g.results.nationality.value} comparison={g.results.nationality.comparison} />
-            <Cell label="Last event" display={g.results.last_event.value} comparison={g.results.last_event.comparison} />
-          </div>
-        </div>
-      ))}
-    </div>
+    <ol className="space-y-5" role="table" aria-label="Guess history">
+      {guesses
+        .map((g, i) => ({ g, n: i + 1 }))
+        .reverse()
+        .map(({ g, n }) => (
+          <li
+            key={`${g.fighter_id}-${n}`}
+            role="row"
+            className={`flex gap-3 border-3 border-ink bg-bone p-3 text-ink ${g.correct ? "shadow-blood-lg" : "shadow-[6px_6px_0_0_#7A0A06]"}`}
+          >
+            <div className="hidden flex-col items-center gap-2 sm:flex">
+              <FighterPhoto name={g.fighter_name} url={g.photo_url} credit={g.photo_credit} size="md" />
+              <span className="font-display text-sm">Guess {n}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex items-center gap-2">
+                <FighterPhoto name={g.fighter_name} url={g.photo_url} credit={g.photo_credit} size="sm" className="sm:hidden" />
+                <p className="min-w-0 flex-1 truncate font-display text-2xl uppercase leading-none">
+                  <span className="sm:hidden">{n}. </span>
+                  {g.fighter_name}
+                </p>
+                {g.correct && (
+                  <span className="shrink-0 border-2 border-ink bg-blood px-2 py-0.5 text-xs font-bold text-bone">
+                    ✓ Correct
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6" role="rowgroup">
+                <Cell
+                  label="Age"
+                  display={`${g.results.age.value}`}
+                  comparison={g.results.age.comparison}
+                  hint={orderedHint(g.results.age.comparison, "older", "younger")}
+                />
+                <Cell label="Division" display={g.results.division.value} comparison={g.results.division.comparison} />
+                <Cell
+                  label="Height"
+                  display={`${g.results.height.value} cm`}
+                  comparison={g.results.height.comparison}
+                  hint={orderedHint(g.results.height.comparison, "taller", "shorter")}
+                />
+                <Cell label="Record" display={g.results.record.value} comparison={g.results.record.comparison} />
+                <Cell label="Nation" display={g.results.nationality.value} comparison={g.results.nationality.comparison} />
+                <Cell label="Last event" display={g.results.last_event.value} comparison={g.results.last_event.comparison} />
+              </div>
+            </div>
+          </li>
+        ))}
+    </ol>
   );
 }

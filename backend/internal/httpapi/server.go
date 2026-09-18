@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,8 +50,10 @@ func New(st store.FighterStore, sel domain.Selector, clk Clock, logger *slog.Log
 	s := &Server{Store: st, Selector: sel, Clock: clk, Logger: logger, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/game/today", s.handleToday)
+	s.mux.HandleFunc("/api/fighters", s.handleListFighters)
 	s.mux.HandleFunc("/api/fighters/search", s.handleSearch)
 	s.mux.HandleFunc("/api/game/guess", s.handleGuess)
+	s.mux.HandleFunc("/api/game/hints", s.handleHints)
 	return s
 }
 
@@ -66,10 +69,13 @@ func (s *Server) gameDate() time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, now.Location())
 }
 
-// targetID resolves today's target without ever exposing it to the client.
-func (s *Server) targetID(ctx context.Context) (int, time.Time, error) {
+// maxHintGuesses bounds the guesses parameter; every hint unlocks well below it.
+const maxHintGuesses = 100
+
+// targetID resolves the pool's daily target without ever exposing it to the client.
+func (s *Server) targetID(ctx context.Context, pool domain.Pool) (int, time.Time, error) {
 	gameDate := s.gameDate()
-	ids, err := s.Store.GameFighterIDs(ctx)
+	ids, err := s.Store.GameFighterIDs(ctx, pool)
 	if err != nil {
 		return 0, gameDate, err
 	}
@@ -78,6 +84,33 @@ func (s *Server) targetID(ctx context.Context) (int, time.Time, error) {
 		return 0, gameDate, err
 	}
 	return id, gameDate, nil
+}
+
+// target loads the pool's daily target view, logging and writing a 500 on failure.
+func (s *Server) target(ctx context.Context, w http.ResponseWriter, pool domain.Pool) (domain.FighterView, time.Time, bool) {
+	id, gameDate, err := s.targetID(ctx, pool)
+	if err != nil {
+		s.Logger.Error("target selection failed", "pool", pool, "err", err)
+		writeError(w, http.StatusInternalServerError, "game_unavailable", "daily game unavailable")
+		return domain.FighterView{}, gameDate, false
+	}
+	view, err := s.Store.FighterView(ctx, id)
+	if err != nil {
+		s.Logger.Error("target lookup failed", "pool", pool, "err", err)
+		writeError(w, http.StatusInternalServerError, "game_unavailable", "daily game unavailable")
+		return domain.FighterView{}, gameDate, false
+	}
+	return view, gameDate, true
+}
+
+// parsePool parses an optional pool value, writing a 400 when unknown.
+func parsePool(w http.ResponseWriter, raw string) (domain.Pool, bool) {
+	pool, err := domain.ParsePool(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_pool", "pool must be 'all' or 'men'")
+		return "", false
+	}
+	return pool, true
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -132,9 +165,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "query_too_long", "query must be at most 100 characters")
 		return
 	}
+	pool, ok := parsePool(w, r.URL.Query().Get("pool"))
+	if !ok {
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	results, err := s.Store.SearchFighters(ctx, q, 8)
+	results, err := s.Store.SearchFighters(ctx, pool, q, 8)
 	if err != nil {
 		s.Logger.Error("search failed", "err", err)
 		writeError(w, http.StatusInternalServerError, "search_failed", "search failed")
@@ -146,9 +183,35 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, results)
 }
 
-// guessRequest is validated strictly: unknown fields rejected, id must be > 0.
+// GET /api/fighters?pool= — the pool's roster for browsing, alphabetical.
+func (s *Server) handleListFighters(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use GET")
+		return
+	}
+	pool, ok := parsePool(w, r.URL.Query().Get("pool"))
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	roster, err := s.Store.ListFighters(ctx, pool)
+	if err != nil {
+		s.Logger.Error("list fighters failed", "err", err)
+		writeError(w, http.StatusInternalServerError, "list_failed", "could not load fighters")
+		return
+	}
+	if roster == nil {
+		roster = []store.SearchResult{}
+	}
+	writeJSON(w, http.StatusOK, roster)
+}
+
+// guessRequest is validated strictly: unknown fields rejected, id must be > 0,
+// pool optional (defaults to all fighters).
 type guessRequest struct {
-	FighterID int `json:"fighter_id"`
+	FighterID int    `json:"fighter_id"`
+	Pool      string `json:"pool"`
 }
 
 // POST /api/game/guess
@@ -169,6 +232,10 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_fighter_id", "fighter_id must be a positive integer")
 		return
 	}
+	pool, ok := parsePool(w, req.Pool)
+	if !ok {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
@@ -185,20 +252,36 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetID, gameDate, err := s.targetID(ctx)
-	if err != nil {
-		s.Logger.Error("target selection failed", "err", err)
-		writeError(w, http.StatusInternalServerError, "game_unavailable", "daily game unavailable")
+	target, gameDate, found := s.target(ctx, w, pool)
+	if !found {
 		return
 	}
-	target, err := s.Store.FighterView(ctx, targetID)
-	if err != nil {
-		s.Logger.Error("target lookup failed", "err", err)
-		writeError(w, http.StatusInternalServerError, "game_unavailable", "daily game unavailable")
-		return
-	}
-
 	writeJSON(w, http.StatusOK, domain.EvaluateGuess(target, guess, gameDate))
+}
+
+// GET /api/game/hints?guesses=N&pool= — hints unlocked after N guesses.
+// N is client-reported: hints are a convenience, not a secret boundary.
+func (s *Server) handleHints(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use GET")
+		return
+	}
+	guesses, err := strconv.Atoi(r.URL.Query().Get("guesses"))
+	if err != nil || guesses < 0 || guesses > maxHintGuesses {
+		writeError(w, http.StatusBadRequest, "invalid_guesses", "guesses must be an integer between 0 and 100")
+		return
+	}
+	pool, ok := parsePool(w, r.URL.Query().Get("pool"))
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	target, _, found := s.target(ctx, w, pool)
+	if !found {
+		return
+	}
+	writeJSON(w, http.StatusOK, domain.Hints(target, guesses))
 }
 
 // --- middleware ---

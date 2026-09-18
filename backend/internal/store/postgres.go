@@ -15,9 +15,10 @@ import (
 // FighterStore is the persistence port consumed by the HTTP layer.
 // A small interface keeps handlers unit-testable with fakes.
 type FighterStore interface {
-	GameFighterIDs(ctx context.Context) ([]int, error)
+	GameFighterIDs(ctx context.Context, pool domain.Pool) ([]int, error)
 	FighterView(ctx context.Context, id int) (domain.FighterView, error)
-	SearchFighters(ctx context.Context, q string, limit int) ([]SearchResult, error)
+	SearchFighters(ctx context.Context, pool domain.Pool, q string, limit int) ([]SearchResult, error)
+	ListFighters(ctx context.Context, pool domain.Pool) ([]SearchResult, error)
 	Ping(ctx context.Context) error
 }
 
@@ -27,9 +28,22 @@ type SearchResult struct {
 	Name        string  `json:"name"`
 	Nickname    *string `json:"nickname"`
 	PhotoURL    *string `json:"photo_url"`
+	PhotoCredit *string `json:"photo_credit"`
 	Division    *string `json:"division"`
 	Nationality string  `json:"nationality"`
 }
+
+// searchResultSelect projects the SearchResult columns, joining the current
+// division (NULL when a fighter has none).
+const searchResultSelect = `
+SELECT f.id, f.name, f.nickname, f.photo_url, f.photo_credit, d.name AS division, f.nationality
+FROM fighters f
+LEFT JOIN fighter_divisions fd ON fd.fighter_id = f.id AND fd.is_current
+LEFT JOIN divisions d ON d.id = fd.division_id`
+
+// inPool matches the current division's gender against the pool bound to $1;
+// the "all" pool matches every fighter, including those without a division.
+const inPool = `($1::text = 'all' OR d.gender = $1::text)`
 
 // Postgres is the pgx-backed implementation of FighterStore.
 type Postgres struct {
@@ -60,21 +74,22 @@ func (p *Postgres) Close() { p.pool.Close() }
 func (p *Postgres) Ping(ctx context.Context) error { return p.pool.Ping(ctx) }
 
 // GameFighterIDs returns eligible daily-target ids in stable order:
-// fighters with a current division AND at least one recorded fight.
-// Incomplete fighters can never become the target.
-func (p *Postgres) GameFighterIDs(ctx context.Context) ([]int, error) {
+// fighters with a current division in the pool AND at least one recorded
+// fight. Incomplete fighters can never become the target.
+func (p *Postgres) GameFighterIDs(ctx context.Context, pool domain.Pool) ([]int, error) {
 	rows, err := p.pool.Query(ctx, `
 SELECT f.id
 FROM fighters f
 WHERE EXISTS (
     SELECT 1 FROM fighter_divisions fd
-    WHERE fd.fighter_id = f.id AND fd.is_current
+    JOIN divisions d ON d.id = fd.division_id
+    WHERE fd.fighter_id = f.id AND fd.is_current AND `+inPool+`
 )
 AND EXISTS (
     SELECT 1 FROM fights fl
     WHERE fl.fighter_a_id = f.id OR fl.fighter_b_id = f.id
 )
-ORDER BY f.id ASC`)
+ORDER BY f.id ASC`, string(pool))
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +112,7 @@ func (p *Postgres) FighterView(ctx context.Context, id int) (domain.FighterView,
 	var v domain.FighterView
 	err := p.pool.QueryRow(ctx, `
 SELECT f.id, f.name, f.nickname, f.date_of_birth, f.height_cm, f.nationality,
-       f.wins, f.losses, f.draws, f.no_contests, f.stance, f.photo_url,
+       f.wins, f.losses, f.draws, f.no_contests, f.stance, f.photo_url, f.photo_credit,
        d.name AS division, e.name AS last_event, e.date AS last_event_date
 FROM fighters f
 JOIN fighter_divisions fd ON fd.fighter_id = f.id AND fd.is_current
@@ -112,7 +127,7 @@ JOIN LATERAL (
 ) e ON TRUE
 WHERE f.id = $1`, id).Scan(
 		&v.ID, &v.Name, &v.Nickname, &v.DateOfBirth, &v.HeightCm, &v.Nationality,
-		&v.Wins, &v.Losses, &v.Draws, &v.NoContests, &v.Stance, &v.PhotoURL,
+		&v.Wins, &v.Losses, &v.Draws, &v.NoContests, &v.Stance, &v.PhotoURL, &v.PhotoCredit,
 		&v.Division, &v.LastEvent, &v.LastEventDate,
 	)
 	if err != nil {
@@ -127,27 +142,39 @@ WHERE f.id = $1`, id).Scan(
 // SearchFighters performs a case-insensitive partial-name search backed by the
 // pg_trgm GIN index (see migration 006). The LIKE pattern is built inside SQL
 // with a bound parameter, so user input can never alter query structure.
-func (p *Postgres) SearchFighters(ctx context.Context, q string, limit int) ([]SearchResult, error) {
+func (p *Postgres) SearchFighters(ctx context.Context, pool domain.Pool, q string, limit int) ([]SearchResult, error) {
 	if limit <= 0 || limit > 20 {
 		limit = 8
 	}
-	rows, err := p.pool.Query(ctx, `
-SELECT f.id, f.name, f.nickname, f.photo_url, d.name AS division, f.nationality
-FROM fighters f
-LEFT JOIN fighter_divisions fd ON fd.fighter_id = f.id AND fd.is_current
-LEFT JOIN divisions d ON d.id = fd.division_id
-WHERE f.name ILIKE '%' || $1 || '%'
-   OR COALESCE(f.nickname, '') ILIKE '%' || $1 || '%'
+	rows, err := p.pool.Query(ctx, searchResultSelect+`
+WHERE `+inPool+`
+  AND (f.name ILIKE '%' || $2 || '%' OR COALESCE(f.nickname, '') ILIKE '%' || $2 || '%')
 ORDER BY f.name ASC
-LIMIT $2`, q, limit)
+LIMIT $3`, string(pool), q, limit)
 	if err != nil {
 		return nil, err
 	}
+	return scanSearchResults(rows)
+}
+
+// ListFighters returns the pool's roster alphabetically, in the same minimal
+// shape as search so browsing reveals nothing about the daily target.
+func (p *Postgres) ListFighters(ctx context.Context, pool domain.Pool) ([]SearchResult, error) {
+	rows, err := p.pool.Query(ctx, searchResultSelect+`
+WHERE `+inPool+`
+ORDER BY f.name ASC`, string(pool))
+	if err != nil {
+		return nil, err
+	}
+	return scanSearchResults(rows)
+}
+
+func scanSearchResults(rows pgx.Rows) ([]SearchResult, error) {
 	defer rows.Close()
 	out := []SearchResult{}
 	for rows.Next() {
 		var r SearchResult
-		if err := rows.Scan(&r.ID, &r.Name, &r.Nickname, &r.PhotoURL, &r.Division, &r.Nationality); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Nickname, &r.PhotoURL, &r.PhotoCredit, &r.Division, &r.Nationality); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -1,12 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Docker Compose serves the app with `next start` (Node server).
-  // Cloudflare Pages needs fully static files: set STATIC_EXPORT=1 in the
-  // Pages build environment to emit out/ instead. The game UI is fully
-  // client-rendered, so static export works without changes.
-  ...(process.env.STATIC_EXPORT === "1"
-    ? { output: "export" }
-    : { output: "standalone" }),
+  // Default is a static export (out/) served as Cloudflare Workers assets.
+  // The Docker image sets NEXT_OUTPUT=standalone to run `node server.js`.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : "export",
+  // Static export has no image optimizer; fighter photos are already sized Wikimedia thumbnails.
+  images: { unoptimized: true },
   reactStrictMode: true,
 };
 

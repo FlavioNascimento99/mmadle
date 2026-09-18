@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mmadle",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-18",
+  "build": {
+    "command": "npm ci && npm run build",
+    "cwd": "frontend"
+  },
+  "assets": {
+    "directory": "frontend/out",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "GAME_TIMEZONE": "UTC"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "containers": [
+    {
+      "class_name": "MmadleApi",
+      "image": "./backend/Dockerfile",
+      "image_build_context": "./backend",
+      "max_instances": 1,
+      "name": "mmadle-api",
+      "instance_type": "lite"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "MmadleApi",
+        "name": "MMADLE_API"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["MmadleApi"],
+      "tag": "v1"
+    }
+  ]
+}

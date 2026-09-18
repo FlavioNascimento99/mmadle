@@ -50,6 +50,7 @@ type FighterView struct {
 	NoContests    int
 	Stance        *string
 	PhotoURL      *string
+	PhotoCredit   *string
 	Division      string
 	LastEvent     string
 	LastEventDate time.Time
@@ -127,10 +128,12 @@ type GuessResults struct {
 
 // GuessOutcome is the full evaluated guess returned to the frontend.
 // It contains NO target data: only the guessed fighter's display values
-// and semantic comparisons.
+// (name, photo) and semantic comparisons.
 type GuessOutcome struct {
 	FighterID   int          `json:"fighter_id"`
 	FighterName string       `json:"fighter_name"`
+	PhotoURL    *string      `json:"photo_url"`
+	PhotoCredit *string      `json:"photo_credit"`
 	Results     GuessResults `json:"results"`
 	Correct     bool         `json:"correct"`
 }
@@ -177,6 +180,8 @@ func EvaluateGuess(target, guess FighterView, gameDate time.Time) GuessOutcome {
 	return GuessOutcome{
 		FighterID:   guess.ID,
 		FighterName: guess.Name,
+		PhotoURL:    guess.PhotoURL,
+		PhotoCredit: guess.PhotoCredit,
 		Results: GuessResults{
 			Age:         Result[int]{Value: guessAge, Comparison: ageCmp},
 			Division:    Result[string]{Value: guess.Division, Comparison: divisionCmp},

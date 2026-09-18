@@ -1,4 +1,5 @@
-import type { Comparison, GuessOutcome } from "./api";
+import { z } from "zod";
+import { GuessOutcomeSchema, type Comparison, type GuessOutcome, type Pool } from "./api";
 
 /**
  * Accessible metadata for each comparison state. UI must never rely on
@@ -14,31 +15,31 @@ export function comparisonMeta(comparison: Comparison): {
       return {
         symbol: "✓",
         label: "correct",
-        classes: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+        classes: "bg-blood text-bone",
       };
     case "higher":
       return {
         symbol: "↑",
         label: "target is higher",
-        classes: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+        classes: "bg-bone text-ink",
       };
     case "lower":
       return {
         symbol: "↓",
         label: "target is lower",
-        classes: "bg-sky-500/20 text-sky-300 border-sky-500/40",
+        classes: "bg-bone text-ink",
       };
     case "incorrect":
     default:
       return {
         symbol: "✗",
         label: "incorrect",
-        classes: "bg-zinc-500/20 text-zinc-300 border-zinc-500/40",
+        classes: "bg-ink text-steel",
       };
   }
 }
 
-/** Emoji grid for shareable results (future: share button). */
+/** Emoji grid row for one guess in the shareable result. */
 export function outcomeToEmoji(outcome: GuessOutcome): string {
   const cell = (c: Comparison) =>
     c === "correct" ? "🟩" : c === "incorrect" ? "🟥" : c === "higher" ? "🔼" : "🔽";
@@ -53,6 +54,23 @@ export function outcomeToEmoji(outcome: GuessOutcome): string {
   ].join("");
 }
 
-export function storageKey(gameDate: string): string {
-  return `mmadle-guesses-${gameDate}`;
+export function storageKey(gameDate: string, pool: Pool): string {
+  return `mmadle-guesses-${pool}-${gameDate}`;
+}
+
+export function shareText(gameDate: string, pool: Pool, guesses: GuessOutcome[]): string {
+  const mode = pool === "men" ? " (men only)" : "";
+  const tries = `${guesses.length} ${guesses.length === 1 ? "try" : "tries"}`;
+  return [`MMAdle ${gameDate}${mode} — ${tries}`, ...guesses.map(outcomeToEmoji)].join("\n");
+}
+
+/** Restores a saved game from localStorage; anything invalid starts fresh. */
+export function parseSavedGuesses(raw: string | null): GuessOutcome[] {
+  if (!raw) return [];
+  try {
+    const parsed = z.array(GuessOutcomeSchema).safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
 }

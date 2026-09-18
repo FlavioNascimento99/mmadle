@@ -1,44 +1,44 @@
 import type { ReactNode } from "react";
 
+function Legend({ symbol, className, children }: { symbol: string; className: string; children: ReactNode }) {
+  return (
+    <li className="flex items-start gap-2">
+      <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center border-2 border-ink font-bold ${className}`}>
+        {symbol}
+      </span>
+      <span>{children}</span>
+    </li>
+  );
+}
+
 export function Header({ gameDate }: { gameDate: string }) {
   return (
-    <header className="border-b border-zinc-800">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+    <header className="border-b-4 border-blood">
+      <div className="mx-auto flex max-w-5xl items-end justify-between gap-4 px-4 pb-4 pt-6">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-zinc-50">
-            MMAdle <span className="text-red-500">🥊</span>
+          <h1 className="font-display text-6xl uppercase leading-[0.85] tracking-tight text-bone sm:text-7xl">
+            MMA<span className="text-blood">dle</span>
           </h1>
-          <p className="text-xs text-zinc-400">
-            The daily MMA fighter guessing game
-            {gameDate ? ` · ${gameDate}` : ""}
+          <p className="mt-2 text-sm text-steel">
+            Guess today&apos;s hidden UFC fighter{gameDate ? `, ${gameDate}` : ""}
           </p>
         </div>
         <details className="relative">
-          <summary className="cursor-pointer list-none rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-zinc-500">
+          <summary className="press cursor-pointer list-none whitespace-nowrap border-3 border-bone bg-ink px-3 py-1.5 font-semibold text-bone shadow-blood">
             How to play
           </summary>
-          <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-zinc-700 bg-zinc-900 p-4 text-sm text-zinc-300 shadow-xl">
-            <p className="mb-2 font-semibold text-zinc-100">
-              Guess the hidden fighter of the day.
-            </p>
-            <ul className="list-disc space-y-1 pl-4">
-              <li>Search and submit a fighter.</li>
-              <li>
-                <span className="text-emerald-300">✓ correct</span> — attribute
-                matches.
-              </li>
-              <li>
-                <span className="text-amber-300">↑ higher</span> — the target
-                is older / taller. Guess higher!
-              </li>
-              <li>
-                <span className="text-sky-300">↓ lower</span> — the target is
-                younger / shorter. Guess lower!
-              </li>
-              <li>
-                <span className="text-zinc-300">✗ incorrect</span> — no match.
-              </li>
+          <div className="absolute right-0 z-20 mt-3 w-72 border-3 border-ink bg-bone p-4 text-sm text-ink shadow-blood-lg">
+            <p className="mb-3 font-bold">Pick a fighter. Each guess shows how close you are.</p>
+            <ul className="space-y-2">
+              <Legend symbol="✓" className="bg-blood text-bone">Landed: this attribute matches.</Legend>
+              <Legend symbol="↑" className="bg-bone text-ink">The hidden fighter is older or taller.</Legend>
+              <Legend symbol="↓" className="bg-bone text-ink">The hidden fighter is younger or shorter.</Legend>
+              <Legend symbol="✗" className="bg-ink text-steel">Missed: no match.</Legend>
             </ul>
+            <p className="mt-3">
+              Stuck? Hints unlock as you keep guessing. Pick <strong>Men only</strong> for a separate
+              daily fighter from the men&apos;s divisions.
+            </p>
           </div>
         </details>
       </div>
@@ -47,7 +47,5 @@ export function Header({ gameDate }: { gameDate: string }) {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">{children}</div>
-  );
+  return <div className="min-h-screen bg-ink text-bone">{children}</div>;
 }
