@@ -88,7 +88,8 @@ func testServer() (*Server, time.Time) {
 		},
 		pingOK: true,
 	}
-	srv := New(st, fixedSelector{targets: []int{1, 3}}, fixedClock{t: gameDate}, nil)
+	srv := New(st, nil, fixedSelector{targets: []int{1, 3}}, fixedClock{t: gameDate}, nil)
+	srv.SessionSecure = false
 	return srv, gameDate
 }
 
@@ -190,13 +191,21 @@ func TestListFightersRejectsPost(t *testing.T) {
 	}
 }
 
+// postGuess builds a JSON POST like the frontend sends (state-changing
+// routes require Content-Type: application/json as a CSRF defense).
+func postGuess(t *testing.T, path, body string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
 func TestGuessIncorrectAndCorrect(t *testing.T) {
 	srv, _ := testServer()
 	h := srv.Handler("")
 
 	// Incorrect guess (fighter 2 vs target 1).
-	req := httptest.NewRequest(http.MethodPost, "/api/game/guess",
-		strings.NewReader(`{"fighter_id": 2}`))
+	req := postGuess(t, "/api/game/guess", `{"fighter_id": 2}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -220,8 +229,7 @@ func TestGuessIncorrectAndCorrect(t *testing.T) {
 	}
 
 	// Correct guess (fighter 1).
-	req = httptest.NewRequest(http.MethodPost, "/api/game/guess",
-		strings.NewReader(`{"fighter_id": 1}`))
+	req = postGuess(t, "/api/game/guess", `{"fighter_id": 1}`)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -252,8 +260,7 @@ func TestGuessErrors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/api/game/guess",
-				strings.NewReader(tc.body))
+			req := postGuess(t, "/api/game/guess", tc.body)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
 			if rec.Code != tc.want {
@@ -278,5 +285,18 @@ func TestHealth(t *testing.T) {
 	srv.Handler("").ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("health status=%d", rec.Code)
+	}
+}
+
+func TestGuessRequiresJSONContentType(t *testing.T) {
+	srv, _ := testServer()
+	h := srv.Handler("")
+	// No Content-Type: a cross-site simple form post must not reach the game.
+	req := httptest.NewRequest(http.MethodPost, "/api/game/guess",
+		strings.NewReader(`{"fighter_id": 2}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("status=%d want 415 body=%s", rec.Code, rec.Body.String())
 	}
 }

@@ -27,6 +27,9 @@ services:
       PORT: "8080"
       ALLOWED_ORIGINS: "http://localhost:3000,http://frontend:3000"
       GAME_TIMEZONE: ${GAME_TIMEZONE:-UTC}
+      # Local frontend/backend run on plain http, so the session cookie must
+      # not be marked Secure here. Production (https Worker) keeps the default.
+      SESSION_COOKIE_SECURE: "false"
     ports:
       - "8080:8080"
 

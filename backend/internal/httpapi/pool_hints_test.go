@@ -11,7 +11,17 @@ import (
 )
 
 func serve(srv *Server, method, path, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	var reader *strings.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	} else {
+		reader = strings.NewReader("")
+	}
+	req := httptest.NewRequest(method, path, reader)
+	if method == http.MethodPost {
+		// State-changing routes require a JSON content type (CSRF defense).
+		req.Header.Set("Content-Type", "application/json")
+	}
 	rec := httptest.NewRecorder()
 	srv.Handler("").ServeHTTP(rec, req)
 	return rec

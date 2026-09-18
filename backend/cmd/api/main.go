@@ -27,6 +27,16 @@ func env(key, fallback string) string {
 	return fallback
 }
 
+// sessionTTL parses SESSION_TTL (e.g. "720h") with a 30-day default.
+func sessionTTL() time.Duration {
+	if raw := os.Getenv("SESSION_TTL"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 30 * 24 * time.Hour
+}
+
 // runMigrations applies versioned *.sql files from dir in lexical order,
 // tracking applied files in schema_migrations. Idempotent: safe on every boot.
 // seed.sql is skipped here; it is applied separately by cmd/importer.
@@ -115,7 +125,9 @@ func main() {
 		loc = time.UTC
 	}
 
-	srv := httpapi.New(st, domain.HashSelector{}, httpapi.SystemClock{Location: loc}, logger)
+	srv := httpapi.New(st, st, domain.HashSelector{}, httpapi.SystemClock{Location: loc}, logger)
+	srv.SessionTTL = sessionTTL()
+	srv.SessionSecure = env("SESSION_COOKIE_SECURE", "true") != "false"
 	addr := ":" + port
 	httpSrv := &http.Server{
 		Addr:              addr,

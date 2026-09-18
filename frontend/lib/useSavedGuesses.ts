@@ -39,5 +39,12 @@ export function useSavedGuesses(gameDate: string, pool: Pool) {
     [],
   );
 
-  return { guesses: game.key === key ? game.guesses : [], addGuess };
+  // Replaces the guesses (server restore / import): the key stays the same,
+  // so persistence continues under the same game.
+  const setGuesses = useCallback(
+    (guesses: GuessOutcome[]) => setGame((prev) => ({ ...prev, guesses })),
+    [],
+  );
+
+  return { guesses: game.key === key ? game.guesses : [], addGuess, setGuesses };
 }

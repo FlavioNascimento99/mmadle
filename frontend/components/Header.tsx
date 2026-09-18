@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { AuthUser } from "@/lib/api";
 
 function Legend({ symbol, className, children }: { symbol: string; className: string; children: ReactNode }) {
   return (
@@ -11,7 +12,17 @@ function Legend({ symbol, className, children }: { symbol: string; className: st
   );
 }
 
-export function Header({ gameDate }: { gameDate: string }) {
+export function Header({
+  gameDate,
+  user,
+  onSignIn,
+  onSignOut,
+}: {
+  gameDate: string;
+  user: AuthUser | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
+}) {
   return (
     <header className="border-b-4 border-blood">
       <div className="mx-auto flex max-w-5xl items-end justify-between gap-4 px-4 pb-4 pt-6">
@@ -23,7 +34,35 @@ export function Header({ gameDate }: { gameDate: string }) {
             Guess today&apos;s hidden UFC fighter{gameDate ? `, ${gameDate}` : ""}
           </p>
         </div>
-        <details className="relative">
+        <div className="flex items-start gap-2">
+          {user ? (
+            <details className="relative">
+              <summary
+                className="press cursor-pointer list-none whitespace-nowrap border-3 border-bone bg-blood px-3 py-1.5 font-semibold text-bone shadow-blood"
+                aria-label={`Account: ${user.display_name || user.email}`}
+              >
+                {user.display_name || user.email}
+              </summary>
+              <div className="absolute right-0 z-20 mt-3 w-64 border-3 border-ink bg-bone p-4 text-sm text-ink shadow-blood-lg">
+                <p className="break-all font-bold">{user.email}</p>
+                <p className="mt-1 text-steel">Signed in — guesses sync across devices.</p>
+                <button
+                  onClick={onSignOut}
+                  className="press mt-3 w-full border-3 border-ink bg-ink px-3 py-1.5 font-semibold text-bone"
+                >
+                  Sign out
+                </button>
+              </div>
+            </details>
+          ) : (
+            <button
+              onClick={onSignIn}
+              className="press whitespace-nowrap border-3 border-bone bg-blood px-3 py-1.5 font-semibold text-bone shadow-blood"
+            >
+              Sign in
+            </button>
+          )}
+          <details className="relative">
           <summary className="press cursor-pointer list-none whitespace-nowrap border-3 border-bone bg-ink px-3 py-1.5 font-semibold text-bone shadow-blood">
             How to play
           </summary>
@@ -40,7 +79,8 @@ export function Header({ gameDate }: { gameDate: string }) {
               daily fighter from the men&apos;s divisions.
             </p>
           </div>
-        </details>
+          </details>
+        </div>
       </div>
     </header>
   );

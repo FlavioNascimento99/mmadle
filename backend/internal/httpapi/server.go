@@ -36,24 +36,49 @@ func (c SystemClock) Now() time.Time {
 // Server wires routes to the store, selector, and clock.
 type Server struct {
 	Store    store.FighterStore
+	Auth     store.AuthStore
 	Selector domain.Selector
 	Clock    Clock
 	Logger   *slog.Logger
-	mux      *http.ServeMux
+	// SessionTTL is the lifetime of a login session (default 30 days).
+	SessionTTL time.Duration
+	// SessionSecure marks the session cookie Secure; disable only for
+	// plain-http local development (cookies are never sent over http when set).
+	SessionSecure    bool
+	authIPLimiter    *RateLimiter
+	authEmailLimiter *RateLimiter
+	mux              *http.ServeMux
 }
 
-// New builds the route table.
-func New(st store.FighterStore, sel domain.Selector, clk Clock, logger *slog.Logger) *Server {
+// New builds the route table. auth may be nil in tests for unrelated
+// handlers; auth routes then answer 501 auth_unavailable.
+func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk Clock, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	s := &Server{Store: st, Selector: sel, Clock: clk, Logger: logger, mux: http.NewServeMux()}
+	if clk == nil {
+		clk = SystemClock{Location: time.UTC}
+	}
+	s := &Server{
+		Store: st, Auth: auth, Selector: sel, Clock: clk, Logger: logger,
+		SessionTTL:       domain.DefaultSessionTTL,
+		SessionSecure:    true,
+		authIPLimiter:    NewRateLimiter(30, 10*time.Minute, clk.Now),
+		authEmailLimiter: NewRateLimiter(10, 10*time.Minute, clk.Now),
+		mux:              http.NewServeMux(),
+	}
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/game/today", s.handleToday)
 	s.mux.HandleFunc("/api/fighters", s.handleListFighters)
 	s.mux.HandleFunc("/api/fighters/search", s.handleSearch)
 	s.mux.HandleFunc("/api/game/guess", s.handleGuess)
 	s.mux.HandleFunc("/api/game/hints", s.handleHints)
+	s.mux.HandleFunc("/api/auth/register", s.handleRegister)
+	s.mux.HandleFunc("/api/auth/login", s.handleLogin)
+	s.mux.HandleFunc("/api/auth/logout", s.handleLogout)
+	s.mux.HandleFunc("/api/auth/me", s.handleMe)
+	s.mux.HandleFunc("/api/me/guesses", s.handleMyGuesses)
+	s.mux.HandleFunc("/api/me/import", s.handleImport)
 	return s
 }
 
@@ -220,6 +245,9 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
 		return
 	}
+	if !requireJSONContentType(w, r) {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var req guessRequest
 	dec := json.NewDecoder(r.Body)
@@ -256,7 +284,11 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		return
 	}
-	writeJSON(w, http.StatusOK, domain.EvaluateGuess(target, guess, gameDate))
+	outcome := domain.EvaluateGuess(target, guess, gameDate)
+	// Signed-in guesses are recorded server-side (best-effort); guests are
+	// untouched and the response never waits on the write failing.
+	s.recordGuessBestEffort(r, pool, gameDate, outcome)
+	writeJSON(w, http.StatusOK, outcome)
 }
 
 // GET /api/game/hints?guesses=N&pool= — hints unlocked after N guesses.
@@ -295,6 +327,9 @@ func jsonMiddleware(next http.Handler) http.Handler {
 
 // corsMiddleware applies an explicit allow-list (exact origin match, no
 // wildcard reflection). Empty ALLOWED_ORIGINS disables cross-origin access.
+// Allowed origins are trusted with credentials so the session cookie flows in
+// local development (frontend :3000 -> backend :8080); in production the
+// Worker serves UI and /api/* same-origin and CORS is not exercised.
 func corsMiddleware(allowedOrigins string, next http.Handler) http.Handler {
 	allowed := map[string]bool{}
 	for _, o := range strings.Split(allowedOrigins, ",") {
@@ -309,6 +344,7 @@ func corsMiddleware(allowedOrigins string, next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

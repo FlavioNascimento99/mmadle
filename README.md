@@ -166,6 +166,8 @@ See `.env.example`. Summary:
 | `PORT`               | backend | `8080`                                   |
 | `ALLOWED_ORIGINS`    | backend | `http://localhost:3000`                  |
 | `GAME_TIMEZONE`      | backend | `UTC`                                    |
+| `SESSION_TTL`        | backend | `720h` (Go duration; session cookie lifetime) |
+| `SESSION_COOKIE_SECURE` | backend | `true`, except `false` for plain-http local dev |
 | `MIGRATIONS_DIR`     | backend | `migrations` (`/app/migrations` in Docker) |
 | `NEXT_PUBLIC_API_URL`| frontend| unset (same-origin); `http://localhost:8080` in `next dev` |
 | `TEST_DATABASE_URL`  | backend tests | postgres URL for integration tests |
@@ -182,6 +184,8 @@ on startup and tracked in `schema_migrations`:
 - `005_create_events_fights.sql` — events + fights (last event is derived)
 - `006_create_indexes.sql` — trigram/B-tree indexes
 - `007_add_fighter_photo_credit.sql` — mandatory attribution whenever a photo is set
+- `008_add_division_gender.sql` — `men`/`women` on divisions for pool filtering
+- `009_auth.sql` — `users`, `sessions` (hashed opaque tokens), `game_guesses`
 - `seed.sql` — demo dataset (applied separately, see below)
 
 ## Seed / data import
@@ -209,6 +213,12 @@ winner's portrait. Fighters without a free photo get an initials fallback.
 | GET    | `/api/fighters`         | full roster, alphabetical, same minimal fields as search |
 | GET    | `/api/fighters/search?q=` | case-insensitive partial match, max 8 results, minimal fields |
 | POST   | `/api/game/guess`       | `{"fighter_id": 8}` → structured comparison (see below) |
+| POST   | `/api/auth/register`    | `{"email","password","display_name?"}` → account + session cookie |
+| POST   | `/api/auth/login`       | `{"email","password"}` → session cookie (errors never reveal whether the email exists) |
+| POST   | `/api/auth/logout`      | clears the session cookie (idempotent)   |
+| GET    | `/api/auth/me`          | signed-in account, or 401 for guests     |
+| GET    | `/api/me/guesses`       | `?pool=&date=` → signed-in history, re-evaluated server-side |
+| POST   | `/api/me/import`        | `{"pool","date","fighter_ids":[]}` → import local guesses after sign-in |
 
 Guess response (values are the **guessed** fighter's; target stays hidden):
 
@@ -267,6 +277,14 @@ npm run lint && npm run typecheck && npm run build
    integer columns; comparison requires all four to match.
 8. Frontend persists guesses in `localStorage` per game date; the backend
    remains the authority on correctness (no auth in MVP).
+9. **Accounts are first-class but optional.** Registration is email + password
+   (argon2id) with an optional display name; sessions are opaque tokens in an
+   `HttpOnly; Secure; SameSite=Lax` cookie, stored hashed server-side with
+   rotation on login. Signed-in guesses are recorded in `game_guesses` and
+   re-evaluated on read, so another device restores the same board and
+   client-supplied outcomes are never trusted. Login errors are identical for
+   unknown emails and wrong passwords; state-changing routes require
+   `Content-Type: application/json` as a CSRF defense alongside SameSite=Lax.
 
 ## Future extension points
 
