@@ -124,6 +124,32 @@ docker compose up --build -d postgres
 # then migrate + seed as above
 ```
 
+## Deploying the frontend to Cloudflare Pages
+
+The game UI is fully client-rendered, so it can be published as static files.
+Set `STATIC_EXPORT=1` during the Pages build to emit `out/` instead of the
+Docker `standalone` server build.
+
+In the Cloudflare Pages dashboard (connect the `mmadle` repo):
+
+| Setting                 | Value                          |
+| ----------------------- | ------------------------------ |
+| Root directory          | `frontend`                     |
+| Build command           | `npm run build`                |
+| Build output directory  | `out`                          |
+| `STATIC_EXPORT`         | `1`                            |
+| `NEXT_PUBLIC_API_URL`   | URL of your deployed Go backend|
+
+Notes:
+
+- Pages hosts the frontend only. Deploy the Go backend separately (any VPS /
+  Fly.io / Render host that runs Docker or the `./api` binary with
+  `DATABASE_URL`), then point `NEXT_PUBLIC_API_URL` at it.
+- `NEXT_PUBLIC_*` values are baked in at build time: changing the backend URL
+  requires a Pages rebuild (Retry deployment).
+- Docker Compose is unaffected: without `STATIC_EXPORT` the app still builds
+  in `standalone` mode for `next start`.
+
 ## Environment variables
 
 See `.env.example`. Summary:
