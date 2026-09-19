@@ -145,7 +145,8 @@ describe("admin metrics", () => {
   });
 });
 
-describe("my stats", () => {  it("fetches personal stats with credentials", async () => {
+describe("my stats", () => {
+  it("fetches personal stats with credentials", async () => {
     const stats = {
       pools: {
         all: {
