@@ -5,21 +5,21 @@ import (
 	"testing"
 )
 
-func TestValidateEmail(t *testing.T) {
-	valid := []string{"a@b.co", "Fighter@UFC.COM", "  fan@mmadle.gg  ", "first.last+tag@example.org"}
-	for _, e := range valid {
-		if err := ValidateEmail(e); err != nil {
-			t.Fatalf("ValidateEmail(%q) = %v, want nil", e, err)
+func TestValidateUsername(t *testing.T) {
+	valid := []string{"poatan", "Fan_99", "  MMAFan  ", "a_b_c"}
+	for _, u := range valid {
+		if err := ValidateUsername(u); err != nil {
+			t.Fatalf("ValidateUsername(%q) = %v, want nil", u, err)
 		}
 	}
-	invalid := []string{"", "no-at-sign", "a@b", "a@.com", "a@b.", "a @b.co", "a@@b.co", "@b.co", "a@"}
-	for _, e := range invalid {
-		if err := ValidateEmail(e); err == nil {
-			t.Fatalf("ValidateEmail(%q) = nil, want error", e)
+	invalid := []string{"", "ab", "fan@mmadle.gg", "has space", "dash-name", "dots.name", strings.Repeat("x", 21), "ünïcode"}
+	for _, u := range invalid {
+		if err := ValidateUsername(u); err == nil {
+			t.Fatalf("ValidateUsername(%q) = nil, want error", u)
 		}
 	}
-	if got := NormalizeEmail("  FAN@Mmadle.GG  "); got != "fan@mmadle.gg" {
-		t.Fatalf("NormalizeEmail = %q", got)
+	if got := NormalizeUsername("  PoaTan_99  "); got != "poatan_99" {
+		t.Fatalf("NormalizeUsername = %q", got)
 	}
 }
 
@@ -44,20 +44,6 @@ func TestValidatePassword(t *testing.T) {
 	}
 	if err := ValidatePassword("uFc-faN-09!x"); err != nil {
 		t.Fatalf("10-char unique password rejected: %v", err)
-	}
-}
-
-func TestValidateDisplayName(t *testing.T) {
-	if err := ValidateDisplayName(""); err != nil {
-		t.Fatalf("empty display name is optional: %v", err)
-	}
-	if err := ValidateDisplayName("Conor"); err != nil {
-		t.Fatalf("valid name rejected: %v", err)
-	}
-	for _, bad := range []string{" padded ", "two  spaces", "has\nnewline", strings.Repeat("x", 31)} {
-		if err := ValidateDisplayName(bad); err == nil {
-			t.Fatalf("display name %q must be rejected", bad)
-		}
 	}
 }
 

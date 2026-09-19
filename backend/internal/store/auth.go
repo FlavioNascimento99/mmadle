@@ -13,19 +13,20 @@ import (
 // are opaque strings here; hashing rules live in internal/domain.
 
 var (
-	// ErrEmailTaken is returned when registering an address that already exists.
-	ErrEmailTaken = errors.New("email already registered")
+	// ErrUsernameTaken is returned when registering a username that already exists.
+	ErrUsernameTaken = errors.New("username already registered")
 	// ErrNoSession is returned for unknown or expired session tokens.
 	ErrNoSession = errors.New("session not found")
 )
 
 // User is a player account. PasswordHash is the argon2id PHC string and must
-// never leave the backend (no JSON tags on purpose).
+// never leave the backend (no JSON tags on purpose). Role gates the admin
+// metrics interface; 'player' is the default.
 type User struct {
 	ID           int64
-	Email        string
+	Username     string
 	PasswordHash string
-	DisplayName  *string
+	Role         string
 	CreatedAt    time.Time
 }
 
@@ -41,8 +42,8 @@ type GameGuess struct {
 
 // AuthStore is the persistence port for accounts and game records.
 type AuthStore interface {
-	CreateUser(ctx context.Context, email, passwordHash string, displayName *string) (User, error)
-	FindUserByEmail(ctx context.Context, email string) (User, error)
+	CreateUser(ctx context.Context, username, passwordHash string) (User, error)
+	FindUserByUsername(ctx context.Context, username string) (User, error)
 	FindUserByID(ctx context.Context, id int64) (User, error)
 	CreateSession(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time) error
 	FindSessionUser(ctx context.Context, tokenHash string, now time.Time) (User, error)
@@ -50,4 +51,6 @@ type AuthStore interface {
 	DeleteUserSessions(ctx context.Context, userID int64, exceptTokenHash string) error
 	RecordGuess(ctx context.Context, userID int64, pool domain.Pool, gameDate time.Time, fighterID int, correct bool) (GameGuess, error)
 	ListGuesses(ctx context.Context, userID int64, pool domain.Pool, gameDate time.Time) ([]GameGuess, error)
+	// SetUserRole changes an account's role (promotion/demotion path).
+	SetUserRole(ctx context.Context, userID int64, role string) error
 }

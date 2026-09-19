@@ -23,7 +23,7 @@ import (
 // cross-site forms cannot set a JSON content type without a preflight).
 const sessionCookieName = "mmadle_session"
 
-// dummyPasswordHash absorbs login timing when the email does not exist, so
+// dummyPasswordHash absorbs login timing when the username does not exist, so
 // unknown addresses take ~the same time as a real password check. Generated
 // once at startup; on failure it is replaced by a per-boot random hash.
 var dummyPasswordHash string
@@ -42,14 +42,14 @@ func init() {
 // userResponse is the public account shape. The password hash never leaves
 // the backend: it is mapped explicitly, never serialized from store.User.
 type userResponse struct {
-	ID          int64   `json:"id"`
-	Email       string  `json:"email"`
-	DisplayName *string `json:"display_name"`
-	CreatedAt   string  `json:"created_at"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"created_at"`
 }
 
 func toUserResponse(u store.User) userResponse {
-	return userResponse{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339)}
+	return userResponse{ID: u.ID, Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339)}
 }
 
 // requireJSONContentType rejects state-changing requests without a JSON
@@ -184,12 +184,11 @@ func (s *Server) authUnavailable(w http.ResponseWriter) bool {
 }
 
 type registerRequest struct {
-	Email       string  `json:"email"`
-	Password    string  `json:"password"`
-	DisplayName *string `json:"display_name"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
-// POST /api/auth/register — email + password (+ optional display name).
+// POST /api/auth/register — username + password.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
@@ -202,24 +201,16 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !decodeStrict(w, r, &req) {
 		return
 	}
-	email := domain.NormalizeEmail(req.Email)
-	if err := domain.ValidateEmail(email); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_email", "enter a valid email address")
+	username := domain.NormalizeUsername(req.Username)
+	if err := domain.ValidateUsername(username); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_username", "username must be 3-20 letters, digits or underscores")
 		return
 	}
 	if err := domain.ValidatePassword(req.Password); err != nil {
 		writeError(w, http.StatusBadRequest, "weak_password", "password must be at least 10 characters and not a common password")
 		return
 	}
-	display := ""
-	if req.DisplayName != nil {
-		display = strings.TrimSpace(*req.DisplayName)
-		if err := domain.ValidateDisplayName(display); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_display_name", "display name must be 1-30 characters")
-			return
-		}
-	}
-	if !s.authIPLimiter.Allow("register:ip:"+clientIP(r)) || !s.authEmailLimiter.Allow("register:email:"+email) {
+	if !s.authIPLimiter.Allow("register:ip:"+clientIP(r)) || !s.authNameLimiter.Allow("register:username:"+username) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts, try again later")
 		return
 	}
@@ -230,16 +221,12 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "auth_failed", "could not create account")
 		return
 	}
-	var displayArg *string
-	if display != "" {
-		displayArg = &display
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
-	user, err := s.Auth.CreateUser(ctx, email, hash, displayArg)
+	user, err := s.Auth.CreateUser(ctx, username, hash)
 	if err != nil {
-		if errors.Is(err, store.ErrEmailTaken) {
-			writeError(w, http.StatusConflict, "email_taken", "an account with this email already exists")
+		if errors.Is(err, store.ErrUsernameTaken) {
+			writeError(w, http.StatusConflict, "username_taken", "an account with this username already exists")
 			return
 		}
 		s.Logger.Error("user creation failed")
@@ -249,15 +236,16 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !s.issueSession(ctx, w, user.ID) {
 		return
 	}
+	s.maybePromote(ctx, &user)
 	writeJSON(w, http.StatusCreated, toUserResponse(user))
 }
 
 type loginRequest struct {
-	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// POST /api/auth/login — errors never reveal whether the email exists.
+// POST /api/auth/login — errors never reveal whether the username exists.
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use POST")
@@ -270,25 +258,25 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !decodeStrict(w, r, &req) {
 		return
 	}
-	email := domain.NormalizeEmail(req.Email)
-	if !s.authIPLimiter.Allow("login:ip:"+clientIP(r)) || !s.authEmailLimiter.Allow("login:email:"+email) {
+	username := domain.NormalizeUsername(req.Username)
+	if !s.authIPLimiter.Allow("login:ip:"+clientIP(r)) || !s.authNameLimiter.Allow("login:username:"+username) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts, try again later")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
-	user, err := s.Auth.FindUserByEmail(ctx, email)
+	user, err := s.Auth.FindUserByUsername(ctx, username)
 	if err != nil {
-		// Absorb timing so unknown addresses cost ~one password check, then
+		// Absorb timing so unknown usernames cost ~one password check, then
 		// answer exactly like a wrong password. Nothing distinguishing is
 		// logged or returned.
 		_ = domain.VerifyPassword(dummyPasswordHash, req.Password)
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect")
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "username or password is incorrect")
 		return
 	}
 	if err := domain.VerifyPassword(user.PasswordHash, req.Password); err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect")
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "username or password is incorrect")
 		return
 	}
 	// Drop the presented session, if any, before issuing the fresh one.
@@ -298,6 +286,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.issueSession(ctx, w, user.ID) {
 		return
 	}
+	s.maybePromote(ctx, &user)
 	writeJSON(w, http.StatusOK, toUserResponse(user))
 }
 

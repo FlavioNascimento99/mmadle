@@ -131,8 +131,8 @@ export async function fetchHints(guesses: number, pool: Pool): Promise<Hints> {
 /** Signed-in account. Password hashes never leave the backend. */
 export const AuthUserSchema = z.object({
   id: z.number(),
-  email: z.string(),
-  display_name: z.string().nullable(),
+  username: z.string(),
+  role: z.enum(["player", "admin"]),
   created_at: z.string(),
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
@@ -151,25 +151,17 @@ async function authError(res: Response, context: string): Promise<Error> {
   return new Error(`${context} failed (${res.status}): ${body.slice(0, 200)}`);
 }
 
-export async function register(
-  email: string,
-  password: string,
-  displayName?: string,
-): Promise<AuthUser> {
+export async function register(username: string, password: string): Promise<AuthUser> {
   const res = await fetch(
     `${apiBase()}/api/auth/register`,
-    authInit("POST", {
-      email,
-      password,
-      ...(displayName ? { display_name: displayName } : {}),
-    }),
+    authInit("POST", { username, password }),
   );
   if (!res.ok) throw await authError(res, "Creating account");
   return parseOrThrow(res, AuthUserSchema, "Creating account");
 }
 
-export async function login(email: string, password: string): Promise<AuthUser> {
-  const res = await fetch(`${apiBase()}/api/auth/login`, authInit("POST", { email, password }));
+export async function login(username: string, password: string): Promise<AuthUser> {
+  const res = await fetch(`${apiBase()}/api/auth/login`, authInit("POST", { username, password }));
   if (!res.ok) throw await authError(res, "Signing in");
   return parseOrThrow(res, AuthUserSchema, "Signing in");
 }
@@ -213,4 +205,65 @@ export async function importGuesses(
   );
   if (!res.ok) throw await authError(res, "Importing guesses");
   return parseOrThrow(res, ImportResultSchema, "Importing guesses");
+}
+
+const DayCountSchema = z.object({ date: z.string(), count: z.number() });
+
+/** Product metrics from our own game records (admin only). */
+export const MetricsOverviewSchema = z.object({
+  days: z.number(),
+  since: z.string(),
+  signups_total: z.number(),
+  signups_by_day: z.array(DayCountSchema),
+  players_by_day: z.array(DayCountSchema),
+  guesses_by_day: z.array(DayCountSchema),
+  games_total: z.number(),
+  games_won: z.number(),
+  win_rate: z.number(),
+  avg_guesses_to_win: z.number(),
+  by_pool: z.array(
+    z.object({ pool: z.string(), games: z.number(), won: z.number(), guesses: z.number() }),
+  ),
+  top_fighters: z.array(
+    z.object({ fighter_id: z.number(), name: z.string(), guesses: z.number() }),
+  ),
+});
+export type MetricsOverview = z.infer<typeof MetricsOverviewSchema>;
+
+export async function fetchOverview(days: number): Promise<MetricsOverview> {
+  const res = await fetch(`${apiBase()}/api/admin/metrics/overview?days=${days}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return parseOrThrow(res, MetricsOverviewSchema, "Loading metrics");
+}
+
+/** Cloudflare Worker infra (requests/errors/CPU), proxied so the API token stays server-side. */
+export const CFWorkersSchema = z.object({
+  days: z.number(),
+  since: z.string(),
+  script: z.string(),
+  requests: z.number(),
+  errors: z.number(),
+  by_day: z.array(
+    z.object({
+      date: z.string(),
+      requests: z.number(),
+      errors: z.number(),
+      subrequests: z.number(),
+      cpu_time_p50_us: z.number(),
+      cpu_time_p99_us: z.number(),
+    }),
+  ),
+});
+export type CFWorkers = z.infer<typeof CFWorkersSchema>;
+
+/** Worker infra, or null when the Cloudflare secrets are not configured (501). */
+export async function fetchCFWorkers(days: number): Promise<CFWorkers | null> {
+  const res = await fetch(`${apiBase()}/api/admin/cloudflare/workers?days=${days}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (res.status === 501) return null;
+  return parseOrThrow(res, CFWorkersSchema, "Loading Cloudflare metrics");
 }

@@ -16,11 +16,11 @@ import (
 )
 
 // fakeAuthStore is an in-memory AuthStore for handler tests: no hashing, no
-// SQL, just the contract (unique email, session expiry, ordered guesses).
+// SQL, just the contract (unique username, session expiry, ordered guesses).
 type fakeAuthStore struct {
 	mu       sync.Mutex
 	users    map[int64]store.User
-	byEmail  map[string]int64
+	byName   map[string]int64
 	sessions map[string]sessionRow
 	guesses  map[string][]store.GameGuess
 	nextID   int64
@@ -34,30 +34,30 @@ type sessionRow struct {
 func newFakeAuthStore() *fakeAuthStore {
 	return &fakeAuthStore{
 		users:    map[int64]store.User{},
-		byEmail:  map[string]int64{},
+		byName:   map[string]int64{},
 		sessions: map[string]sessionRow{},
 		guesses:  map[string][]store.GameGuess{},
 		nextID:   1,
 	}
 }
 
-func (f *fakeAuthStore) CreateUser(ctx context.Context, email, passwordHash string, displayName *string) (store.User, error) {
+func (f *fakeAuthStore) CreateUser(ctx context.Context, username, passwordHash string) (store.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if _, taken := f.byEmail[email]; taken {
-		return store.User{}, store.ErrEmailTaken
+	if _, taken := f.byName[username]; taken {
+		return store.User{}, store.ErrUsernameTaken
 	}
-	u := store.User{ID: f.nextID, Email: email, PasswordHash: passwordHash, DisplayName: displayName, CreatedAt: time.Now()}
+	u := store.User{ID: f.nextID, Username: username, PasswordHash: passwordHash, Role: "player", CreatedAt: time.Now()}
 	f.nextID++
 	f.users[u.ID] = u
-	f.byEmail[email] = u.ID
+	f.byName[username] = u.ID
 	return u, nil
 }
 
-func (f *fakeAuthStore) FindUserByEmail(ctx context.Context, email string) (store.User, error) {
+func (f *fakeAuthStore) FindUserByUsername(ctx context.Context, username string) (store.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if id, ok := f.byEmail[email]; ok {
+	if id, ok := f.byName[username]; ok {
 		return f.users[id], nil
 	}
 	return store.User{}, store.ErrNotFound
@@ -104,6 +104,15 @@ func (f *fakeAuthStore) DeleteUserSessions(ctx context.Context, userID int64, ex
 			delete(f.sessions, hash)
 		}
 	}
+	return nil
+}
+
+func (f *fakeAuthStore) SetUserRole(ctx context.Context, userID int64, role string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u := f.users[userID]
+	u.Role = role
+	f.users[userID] = u
 	return nil
 }
 
@@ -172,7 +181,7 @@ func sessionCookies(rec *httptest.ResponseRecorder) []*http.Cookie {
 func TestRegisterLoginLogoutMe(t *testing.T) {
 	srv, _ := authTestServer()
 
-	rec := postAuth(srv, "/api/auth/register", `{"email":"fan@mmadle.gg","password":"a-correct-horse-battery9","display_name":"Fan"}`)
+	rec := postAuth(srv, "/api/auth/register", `{"username":"octagon_fan","password":"a-correct-horse-battery9"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("register status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -180,7 +189,7 @@ func TestRegisterLoginLogoutMe(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &user); err != nil {
 		t.Fatal(err)
 	}
-	if user["email"] != "fan@mmadle.gg" || user["display_name"] != "Fan" {
+	if user["username"] != "octagon_fan" {
 		t.Fatalf("register response = %v", user)
 	}
 	if _, ok := user["password_hash"]; ok {
@@ -196,7 +205,7 @@ func TestRegisterLoginLogoutMe(t *testing.T) {
 	}
 
 	// Duplicate registration conflicts.
-	if rec := postAuth(srv, "/api/auth/register", `{"email":"fan@mmadle.gg","password":"another-horse-battery9"}`); rec.Code != http.StatusConflict {
+	if rec := postAuth(srv, "/api/auth/register", `{"username":"octagon_fan","password":"another-horse-battery9"}`); rec.Code != http.StatusConflict {
 		t.Fatalf("duplicate status=%d want 409", rec.Code)
 	}
 
@@ -218,8 +227,8 @@ func TestRegisterLoginLogoutMe(t *testing.T) {
 	}
 
 	// Login with the same credentials works; wrong password and unknown
-	// email answer identically (no account enumeration).
-	rec = postAuth(srv, "/api/auth/login", `{"email":"fan@mmadle.gg","password":"a-correct-horse-battery9"}`)
+	// username answer identically (no account enumeration).
+	rec = postAuth(srv, "/api/auth/login", `{"username":"octagon_fan","password":"a-correct-horse-battery9"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -227,8 +236,8 @@ func TestRegisterLoginLogoutMe(t *testing.T) {
 	if len(loginCookies) == 0 || (len(cookies) > 0 && loginCookies[0].Value == cookies[0].Value) {
 		t.Fatal("login must rotate to a fresh session token")
 	}
-	badPass := postAuth(srv, "/api/auth/login", `{"email":"fan@mmadle.gg","password":"wrong-horse-battery9"}`)
-	unknown := postAuth(srv, "/api/auth/login", `{"email":"nobody@mmadle.gg","password":"wrong-horse-battery9"}`)
+	badPass := postAuth(srv, "/api/auth/login", `{"username":"octagon_fan","password":"wrong-horse-battery9"}`)
+	unknown := postAuth(srv, "/api/auth/login", `{"username":"nobody_here","password":"wrong-horse-battery9"}`)
 	if badPass.Code != http.StatusUnauthorized || unknown.Code != http.StatusUnauthorized {
 		t.Fatalf("login failures: known=%d unknown=%d, want both 401", badPass.Code, unknown.Code)
 	}
@@ -244,11 +253,11 @@ func TestRegisterValidation(t *testing.T) {
 		body string
 		want int
 	}{
-		{"bad email", `{"email":"nope","password":"a-correct-horse-battery9"}`, http.StatusBadRequest},
-		{"short password", `{"email":"a@b.co","password":"short9"}`, http.StatusBadRequest},
-		{"common password", `{"email":"a@b.co","password":"password123"}`, http.StatusBadRequest},
-		{"bad display", `{"email":"a@b.co","password":"a-correct-horse-battery9","display_name":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}`, http.StatusBadRequest},
-		{"unknown field", `{"email":"a@b.co","password":"a-correct-horse-battery9","admin":true}`, http.StatusBadRequest},
+		{"bad username", `{"username":"no","password":"a-correct-horse-battery9"}`, http.StatusBadRequest},
+		{"short password", `{"username":"abc","password":"short9"}`, http.StatusBadRequest},
+		{"common password", `{"username":"abc","password":"password123"}`, http.StatusBadRequest},
+		{"bad chars", `{"username":"has space","password":"a-correct-horse-battery9"}`, http.StatusBadRequest},
+		{"unknown field", `{"username":"abc","password":"a-correct-horse-battery9","admin":true}`, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -258,7 +267,7 @@ func TestRegisterValidation(t *testing.T) {
 		})
 	}
 	// Missing JSON content type is rejected (CSRF defense).
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(`{"email":"a@b.co","password":"a-correct-horse-battery9"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(`{"username":"abc","password":"a-correct-horse-battery9"}`))
 	rec := httptest.NewRecorder()
 	srv.Handler("").ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnsupportedMediaType {
@@ -268,22 +277,22 @@ func TestRegisterValidation(t *testing.T) {
 
 func TestAuthRateLimited(t *testing.T) {
 	srv, _ := authTestServer()
-	srv.authEmailLimiter = NewRateLimiter(2, 10*time.Minute, srv.Clock.Now)
+	srv.authNameLimiter = NewRateLimiter(2, 10*time.Minute, srv.Clock.Now)
 	srv.authIPLimiter = NewRateLimiter(100, 10*time.Minute, srv.Clock.Now)
 	for i := 0; i < 2; i++ {
-		rec := postAuth(srv, "/api/auth/login", `{"email":"rl@mmadle.gg","password":"wrong-horse-battery9"}`)
+		rec := postAuth(srv, "/api/auth/login", `{"username":"rate_limited","password":"wrong-horse-battery9"}`)
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: status=%d want 401", i, rec.Code)
 		}
 	}
-	if rec := postAuth(srv, "/api/auth/login", `{"email":"rl@mmadle.gg","password":"wrong-horse-battery9"}`); rec.Code != http.StatusTooManyRequests {
+	if rec := postAuth(srv, "/api/auth/login", `{"username":"rate_limited","password":"wrong-horse-battery9"}`); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("rate-limited status=%d want 429 body=%s", rec.Code, rec.Body.String())
 	}
 }
 
 func TestSignedInGuessesPersistAndRestore(t *testing.T) {
 	srv, _ := authTestServer()
-	rec := postAuth(srv, "/api/auth/register", `{"email":"gamer@mmadle.gg","password":"a-correct-horse-battery9"}`)
+	rec := postAuth(srv, "/api/auth/register", `{"username":"cage_gamer","password":"a-correct-horse-battery9"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("register: %d %s", rec.Code, rec.Body.String())
 	}
@@ -358,7 +367,7 @@ func TestGuessStillWorksForGuests(t *testing.T) {
 
 func TestSessionCookieNeverLogged(t *testing.T) {
 	srv, _ := authTestServer()
-	rec := postAuth(srv, "/api/auth/register", `{"email":"quiet@mmadle.gg","password":"a-correct-horse-battery9"}`)
+	rec := postAuth(srv, "/api/auth/register", `{"username":"quiet_fan","password":"a-correct-horse-battery9"}`)
 	token := sessionCookies(rec)[0].Value
 	if strings.Contains(rec.Body.String(), token) {
 		t.Fatal("session token must never appear in a response body")

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchCFWorkers,
   fetchMe,
   fetchMyGuesses,
+  fetchOverview,
   importGuesses,
   login,
   logout,
@@ -20,32 +22,31 @@ afterEach(() => {
 
 const account = {
   id: 1,
-  email: "fan@mmadle.gg",
-  display_name: "Fan",
+  username: "octagon_fan",
+  role: "player",
   created_at: "2026-09-18T00:00:00Z",
 };
 
 describe("auth", () => {
-  it("registers with email, password and display name", async () => {
+  it("registers with username and password", async () => {
     stubFetch(201, account);
-    await expect(register("fan@mmadle.gg", "a-correct-horse-battery9", "Fan")).resolves.toEqual(account);
+    await expect(register("octagon_fan", "a-correct-horse-battery9")).resolves.toEqual(account);
     expect(fetch).toHaveBeenCalledWith("/api/auth/register", expect.objectContaining({
       method: "POST",
       credentials: "include",
       body: JSON.stringify({
-        email: "fan@mmadle.gg",
+        username: "octagon_fan",
         password: "a-correct-horse-battery9",
-        display_name: "Fan",
       }),
     }));
   });
 
   it("logs in and surfaces server errors with the status", async () => {
     stubFetch(200, account);
-    await expect(login("fan@mmadle.gg", "a-correct-horse-battery9")).resolves.toEqual(account);
+    await expect(login("octagon_fan", "a-correct-horse-battery9")).resolves.toEqual(account);
 
     stubFetch(401, { error: "invalid_credentials" });
-    await expect(login("fan@mmadle.gg", "wrong")).rejects.toThrow(/401/);
+    await expect(login("octagon_fan", "wrong")).rejects.toThrow(/401/);
   });
 
   it("logs out with an empty JSON body", async () => {
@@ -68,8 +69,7 @@ describe("auth", () => {
   });
 });
 
-describe("server guesses", () => {
-  it("fetches one game's history", async () => {
+describe("server guesses", () => {  it("fetches one game's history", async () => {
     stubFetch(200, []);
     await expect(fetchMyGuesses("men", "2026-09-18")).resolves.toEqual([]);
     expect(fetch).toHaveBeenCalledWith("/api/me/guesses?pool=men&date=2026-09-18", expect.objectContaining({
@@ -88,5 +88,55 @@ describe("server guesses", () => {
       credentials: "include",
       body: JSON.stringify({ pool: "all", date: "2026-09-18", fighter_ids: [1, 2] }),
     }));
+  });
+});
+
+describe("admin metrics", () => {
+  const overview = {
+    days: 30,
+    since: "2026-08-20",
+    signups_total: 5,
+    signups_by_day: [],
+    players_by_day: [{ date: "2026-09-18", count: 2 }],
+    guesses_by_day: [{ date: "2026-09-18", count: 4 }],
+    games_total: 2,
+    games_won: 1,
+    win_rate: 0.5,
+    avg_guesses_to_win: 3,
+    by_pool: [{ pool: "all", games: 2, won: 1, guesses: 4 }],
+    top_fighters: [{ fighter_id: 1, name: "Conor McGregor", guesses: 2 }],
+  };
+
+  it("fetches the overview with credentials", async () => {
+    stubFetch(200, overview);
+    await expect(fetchOverview(30)).resolves.toEqual(overview);
+    expect(fetch).toHaveBeenCalledWith("/api/admin/metrics/overview?days=30", expect.objectContaining({
+      credentials: "include",
+    }));
+  });
+
+  it("rejects non-admins so the page can show a locked door", async () => {
+    stubFetch(404, { error: "not_found" });
+    await expect(fetchOverview(30)).rejects.toThrow(/404/);
+  });
+
+  it("returns null when Cloudflare secrets are missing", async () => {
+    stubFetch(501, { error: "cloudflare_not_configured" });
+    await expect(fetchCFWorkers(7)).resolves.toBeNull();
+  });
+
+  it("parses the Cloudflare workers report", async () => {
+    const report = {
+      days: 7,
+      since: "2026-09-12",
+      script: "mmadle",
+      requests: 100,
+      errors: 2,
+      by_day: [
+        { date: "2026-09-18", requests: 100, errors: 2, subrequests: 5, cpu_time_p50_us: 1.5, cpu_time_p99_us: 9.25 },
+      ],
+    };
+    stubFetch(200, report);
+    await expect(fetchCFWorkers(7)).resolves.toEqual(report);
   });
 });

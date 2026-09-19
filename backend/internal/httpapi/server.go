@@ -44,10 +44,20 @@ type Server struct {
 	SessionTTL time.Duration
 	// SessionSecure marks the session cookie Secure; disable only for
 	// plain-http local development (cookies are never sent over http when set).
-	SessionSecure    bool
-	authIPLimiter    *RateLimiter
-	authEmailLimiter *RateLimiter
-	mux              *http.ServeMux
+	SessionSecure bool
+	// AdminMetrics backs /api/admin/metrics/* (nil in tests for other routes).
+	AdminMetrics store.AdminStore
+	// AdminUsernames is the normalized allowlist auto-promoting admins.
+	AdminUsernames map[string]bool
+	// CloudflareToken/Account enable /api/admin/cloudflare/* (Worker secrets).
+	CloudflareToken   string
+	CloudflareAccount string
+	// cfGraphQLURL/cfHTTPClient are seams for tests (GraphQL endpoint + client).
+	cfGraphQLURL    string
+	cfHTTPClient    *http.Client
+	authIPLimiter   *RateLimiter
+	authNameLimiter *RateLimiter
+	mux             *http.ServeMux
 }
 
 // New builds the route table. auth may be nil in tests for unrelated
@@ -61,11 +71,11 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	}
 	s := &Server{
 		Store: st, Auth: auth, Selector: sel, Clock: clk, Logger: logger,
-		SessionTTL:       domain.DefaultSessionTTL,
-		SessionSecure:    true,
-		authIPLimiter:    NewRateLimiter(30, 10*time.Minute, clk.Now),
-		authEmailLimiter: NewRateLimiter(10, 10*time.Minute, clk.Now),
-		mux:              http.NewServeMux(),
+		SessionTTL:      domain.DefaultSessionTTL,
+		SessionSecure:   true,
+		authIPLimiter:   NewRateLimiter(30, 10*time.Minute, clk.Now),
+		authNameLimiter: NewRateLimiter(10, 10*time.Minute, clk.Now),
+		mux:             http.NewServeMux(),
 	}
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/game/today", s.handleToday)
@@ -79,6 +89,8 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/me/guesses", s.handleMyGuesses)
 	s.mux.HandleFunc("/api/me/import", s.handleImport)
+	s.mux.HandleFunc("/api/admin/metrics/overview", s.handleAdminOverview)
+	s.mux.HandleFunc("/api/admin/cloudflare/workers", s.handleCloudflareWorkers)
 	return s
 }
 

@@ -7,8 +7,8 @@ type Props = {
   open: boolean;
   busy: boolean;
   error: string | null;
-  onLogin: (email: string, password: string) => Promise<boolean>;
-  onRegister: (email: string, password: string, displayName?: string) => Promise<boolean>;
+  onLogin: (username: string, password: string) => Promise<boolean>;
+  onRegister: (username: string, password: string) => Promise<boolean>;
   onClose: () => void;
 };
 
@@ -18,9 +18,8 @@ type Props = {
  */
 export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: Props) {
   const [tab, setTab] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => {
     if (open) onClose();
@@ -47,8 +46,8 @@ export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: 
     e.preventDefault();
     const ok =
       tab === "login"
-        ? await onLogin(email.trim(), password)
-        : await onRegister(email.trim(), password, displayName.trim() || undefined);
+        ? await onLogin(username.trim(), password)
+        : await onRegister(username.trim(), password);
     if (ok) onClose();
   };
 
@@ -73,15 +72,17 @@ export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: 
 
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-sm font-semibold text-bone">
-            Email
+            Username
             <input
-              type="email"
+              type="text"
               required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              minLength={3}
+              maxLength={20}
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="mt-1 w-full border-3 border-bone bg-ink px-3 py-2 text-bone placeholder:text-steel/60"
-              placeholder="fan@mmadle.gg"
+              placeholder="octagon_fan"
             />
           </label>
           <label className="block text-sm font-semibold text-bone">
@@ -97,20 +98,6 @@ export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: 
               placeholder="At least 10 characters"
             />
           </label>
-          {tab === "register" && (
-            <label className="block text-sm font-semibold text-bone">
-              Display name <span className="font-normal text-steel">(optional)</span>
-              <input
-                type="text"
-                maxLength={30}
-                autoComplete="nickname"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="mt-1 w-full border-3 border-bone bg-ink px-3 py-2 text-bone placeholder:text-steel/60"
-                placeholder="Poatan Fan"
-              />
-            </label>
-          )}
           {error && (
             <p className="border-3 border-blood bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
               {error}

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import type { AuthUser } from "@/lib/api";
 
 function Legend({ symbol, className, children }: { symbol: string; className: string; children: ReactNode }) {
@@ -39,13 +40,21 @@ export function Header({
             <details className="relative">
               <summary
                 className="press cursor-pointer list-none whitespace-nowrap border-3 border-bone bg-blood px-3 py-1.5 font-semibold text-bone shadow-blood"
-                aria-label={`Account: ${user.display_name || user.email}`}
+                aria-label={`Account: ${user.username}`}
               >
-                {user.display_name || user.email}
+                {user.username}
               </summary>
               <div className="absolute right-0 z-20 mt-3 w-64 border-3 border-ink bg-bone p-4 text-sm text-ink shadow-blood-lg">
-                <p className="break-all font-bold">{user.email}</p>
+                <p className="break-all font-bold">@{user.username}</p>
                 <p className="mt-1 text-steel">Signed in — guesses sync across devices.</p>
+                {user.role === "admin" && (
+                  <Link
+                    href="/admin"
+                    className="press mt-3 block border-3 border-ink bg-blood px-3 py-1.5 text-center font-semibold text-bone"
+                  >
+                    Metrics
+                  </Link>
+                )}
                 <button
                   onClick={onSignOut}
                   className="press mt-3 w-full border-3 border-ink bg-ink px-3 py-1.5 font-semibold text-bone"

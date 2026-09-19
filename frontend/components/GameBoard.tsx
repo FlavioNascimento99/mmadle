@@ -159,7 +159,7 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
         <div className="border-3 border-bone bg-bruise px-3 py-2 text-sm text-bone" role="status">
           <p className="font-semibold">
             You have {localOnlyIds.length} {localOnlyIds.length === 1 ? "guess" : "guesses"} on this
-            device that {user?.display_name || "your account"} doesn&apos;t.
+            device that {user ? `@${user.username}` : "your account"} doesn&apos;t.
           </p>
           <div className="mt-2 flex gap-2">
             <button

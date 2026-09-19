@@ -32,10 +32,10 @@ const (
 	MinPasswordLength = 10
 	// MaxPasswordLength bounds hashing work and request size.
 	MaxPasswordLength = 256
-	// MaxEmailLength bounds the email field (RFC 5321 path limit is 254).
-	MaxEmailLength = 254
-	// MaxDisplayNameLength bounds the optional display name.
-	MaxDisplayNameLength = 30
+	// MinUsernameLength keeps usernames mentionable and unambiguous.
+	MinUsernameLength = 3
+	// MaxUsernameLength bounds the username field.
+	MaxUsernameLength = 20
 	// DefaultSessionTTL is how long a session cookie stays valid.
 	DefaultSessionTTL = 30 * 24 * time.Hour
 	// sessionTokenBytes is the entropy of each opaque session token (256 bit).
@@ -44,9 +44,8 @@ const (
 
 // Auth validation errors.
 var (
-	ErrInvalidEmail    = errors.New("invalid email")
+	ErrInvalidUsername = errors.New("invalid username")
 	ErrWeakPassword    = errors.New("password does not meet requirements")
-	ErrInvalidDisplay  = errors.New("invalid display name")
 	ErrInvalidPassword = errors.New("invalid credentials")
 )
 
@@ -61,29 +60,29 @@ var commonPasswords = map[string]bool{
 	"mmadle1234": true, "ufc1234567": true, "mma1234567": true,
 }
 
-// NormalizeEmail trims whitespace and lowercases. Email uniqueness is enforced
+// NormalizeUsername trims whitespace and lowercases. Uniqueness is enforced
 // by a CITEXT column, so this is for validation/rate-limit keys, not security.
-func NormalizeEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
+func NormalizeUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
 }
 
-// ValidateEmail rejects empty, overlong, or malformed addresses. It is
-// intentionally simple: deliverability is not verified in v1 (no email
-// provider yet; see the verification open question in issue #1).
-func ValidateEmail(email string) error {
-	email = NormalizeEmail(email)
-	if email == "" || len(email) > MaxEmailLength {
-		return ErrInvalidEmail
+// isUsernameChar reports whether r may appear in a username: ASCII letters,
+// digits and underscore only, so mentions stay unambiguous.
+func isUsernameChar(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_'
+}
+
+// ValidateUsername enforces 3-20 ASCII alphanumerics/underscores.
+func ValidateUsername(username string) error {
+	username = NormalizeUsername(username)
+	n := len([]rune(username))
+	if n < MinUsernameLength || n > MaxUsernameLength {
+		return ErrInvalidUsername
 	}
-	if strings.Contains(email, " ") || !strings.Contains(email, "@") {
-		return ErrInvalidEmail
-	}
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return ErrInvalidEmail
-	}
-	if !strings.Contains(parts[1], ".") || strings.HasPrefix(parts[1], ".") || strings.HasSuffix(parts[1], ".") {
-		return ErrInvalidEmail
+	for _, r := range username {
+		if !isUsernameChar(r) {
+			return ErrInvalidUsername
+		}
 	}
 	return nil
 }
@@ -99,26 +98,6 @@ func ValidatePassword(password string) error {
 	}
 	if commonPasswords[strings.ToLower(password)] {
 		return ErrWeakPassword
-	}
-	return nil
-}
-
-// ValidateDisplayName allows empty (optional) and otherwise requires 1-30
-// printable characters with no surrounding whitespace games.
-func ValidateDisplayName(name string) error {
-	if name == "" {
-		return nil
-	}
-	if strings.TrimSpace(name) != name || name != strings.Join(strings.Fields(name), " ") {
-		return ErrInvalidDisplay
-	}
-	if n := len([]rune(name)); n < 1 || n > MaxDisplayNameLength {
-		return ErrInvalidDisplay
-	}
-	for _, r := range name {
-		if r < 0x20 || r == 0x7f {
-			return ErrInvalidDisplay
-		}
 	}
 	return nil
 }
@@ -148,7 +127,7 @@ func HashPassword(password string) (string, error) {
 
 // VerifyPassword parses a PHC hash from HashPassword and compares in constant
 // time. Unknown formats fail closed. A dummy hash keeps login timing similar
-// when the email does not exist (callers pass it explicitly).
+// when the username does not exist (callers pass it explicitly).
 func VerifyPassword(encodedHash, password string) error {
 	var m, t uint32
 	var p uint8

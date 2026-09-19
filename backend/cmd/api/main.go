@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"mmadle/backend/internal/domain"
@@ -35,6 +36,19 @@ func sessionTTL() time.Duration {
 		}
 	}
 	return 30 * 24 * time.Hour
+}
+
+// adminUsernames parses ADMIN_USERNAMES (comma-separated) into a normalized set.
+// Matching accounts promote to admin on register/login; the users.role column
+// stays the source of truth afterwards.
+func adminUsernames() map[string]bool {
+	out := map[string]bool{}
+	for _, e := range strings.Split(os.Getenv("ADMIN_USERNAMES"), ",") {
+		if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+			out[e] = true
+		}
+	}
+	return out
 }
 
 // runMigrations applies versioned *.sql files from dir in lexical order,
@@ -128,6 +142,10 @@ func main() {
 	srv := httpapi.New(st, st, domain.HashSelector{}, httpapi.SystemClock{Location: loc}, logger)
 	srv.SessionTTL = sessionTTL()
 	srv.SessionSecure = env("SESSION_COOKIE_SECURE", "true") != "false"
+	srv.AdminUsernames = adminUsernames()
+	srv.AdminMetrics = st
+	srv.CloudflareToken = os.Getenv("CLOUDFLARE_API_TOKEN")
+	srv.CloudflareAccount = os.Getenv("CLOUDFLARE_ACCOUNT_ID")
 	addr := ":" + port
 	httpSrv := &http.Server{
 		Addr:              addr,

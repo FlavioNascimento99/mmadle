@@ -11,42 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// CreateUser inserts a player account. Email uniqueness is enforced by the
-// CITEXT unique constraint; violations map to ErrEmailTaken.
-func (p *Postgres) CreateUser(ctx context.Context, email, passwordHash string, displayName *string) (User, error) {
+// CreateUser inserts a player account. Username uniqueness is enforced by the
+// CITEXT unique constraint; violations map to ErrUsernameTaken.
+func (p *Postgres) CreateUser(ctx context.Context, username, passwordHash string) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-INSERT INTO users (email, password_hash, display_name)
-VALUES ($1, $2, NULLIF($3, ''))
-RETURNING id, email, password_hash, display_name, created_at`,
-		email, passwordHash, nullableString(displayName)).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.CreatedAt,
+INSERT INTO users (username, password_hash)
+VALUES ($1, $2)
+RETURNING id, username, password_hash, role, created_at`,
+		username, passwordHash).Scan(
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return User{}, ErrEmailTaken
+			return User{}, ErrUsernameTaken
 		}
 		return User{}, err
 	}
 	return u, nil
 }
 
-func nullableString(s *string) any {
-	if s == nil || *s == "" {
-		return nil
-	}
-	return *s
-}
-
-// FindUserByEmail loads an account by address (CITEXT: case-insensitive).
+// FindUserByUsername loads an account by username (CITEXT: case-insensitive).
 // Missing rows map to ErrNotFound so callers can keep login timing generic.
-func (p *Postgres) FindUserByEmail(ctx context.Context, email string) (User, error) {
+func (p *Postgres) FindUserByUsername(ctx context.Context, username string) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT id, email, password_hash, display_name, created_at
-FROM users WHERE email = $1`, email).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.CreatedAt,
+SELECT id, username, password_hash, role, created_at
+FROM users WHERE username = $1`, username).Scan(
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -61,9 +54,9 @@ FROM users WHERE email = $1`, email).Scan(
 func (p *Postgres) FindUserByID(ctx context.Context, id int64) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT id, email, password_hash, display_name, created_at
+SELECT id, username, password_hash, role, created_at
 FROM users WHERE id = $1`, id).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.CreatedAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -89,10 +82,10 @@ INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)`,
 func (p *Postgres) FindSessionUser(ctx context.Context, tokenHash string, now time.Time) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT u.id, u.email, u.password_hash, u.display_name, u.created_at
+SELECT u.id, u.username, u.password_hash, u.role, u.created_at
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1 AND s.expires_at > $2`, tokenHash, now).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.CreatedAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -171,6 +164,13 @@ ORDER BY guess_index ASC`, userID, string(pool), gameDay(gameDate))
 		out = append(out, g)
 	}
 	return out, rows.Err()
+}
+
+// SetUserRole changes an account's role. Callers pass 'player' or 'admin';
+// the CHECK constraint fails closed on anything else.
+func (p *Postgres) SetUserRole(ctx context.Context, userID int64, role string) error {
+	_, err := p.pool.Exec(ctx, `UPDATE users SET role = $2 WHERE id = $1`, userID, role)
+	return err
 }
 
 // gameDay formats a game timestamp as a calendar DATE string for storage.

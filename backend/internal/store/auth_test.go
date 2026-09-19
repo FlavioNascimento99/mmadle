@@ -11,21 +11,19 @@ import (
 
 // Auth integration tests against a real PostgreSQL. Run with:
 //   TEST_DATABASE_URL=postgres://... go test -run TestPostgres_Auth -v ./internal/store/
-// Users get a unique address per test (CITEXT unique would collide otherwise).
+// Users get a unique username per test (CITEXT unique would collide otherwise).
 
 func authTestUser(t *testing.T, p *Postgres, ctx context.Context, tag string) User {
 	t.Helper()
-	email := "mmadle-auth-" + tag + "-" + time.Now().Format("150405.000000000") + "@example.com"
-	display := "Tester " + tag
-	u, err := p.CreateUser(ctx, email, "argon2id-test-hash", &display)
+	// Usernames allow letters/digits/underscore: fold the timestamp's dots.
+	stamp := strings.ReplaceAll(time.Now().Format("150405.000000000"), ".", "")
+	username := "t_" + tag + "_" + stamp
+	u, err := p.CreateUser(ctx, username, "argon2id-test-hash")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	if u.ID == 0 || u.Email != email {
-		t.Fatalf("CreateUser returned %+v for %s", u, email)
-	}
-	if u.DisplayName == nil || *u.DisplayName != display {
-		t.Fatalf("display name not stored: %+v", u)
+	if u.ID == 0 || u.Username != username {
+		t.Fatalf("CreateUser returned %+v for %s", u, username)
 	}
 	return u
 }
@@ -36,39 +34,32 @@ func TestPostgres_AuthUsers(t *testing.T) {
 
 	u := authTestUser(t, p, ctx, "crud")
 
-	// Duplicate email (case-insensitive via CITEXT) is a conflict.
-	if _, err := p.CreateUser(ctx, u.Email, "other-hash", nil); err != ErrEmailTaken {
-		t.Fatalf("duplicate email err = %v, want ErrEmailTaken", err)
+	// Duplicate username (case-insensitive via CITEXT) is a conflict.
+	if _, err := p.CreateUser(ctx, u.Username, "other-hash"); err != ErrUsernameTaken {
+		t.Fatalf("duplicate username err = %v, want ErrUsernameTaken", err)
 	}
 	// Case-insensitive duplicate too.
-	upper := ""
-	for _, r := range u.Email {
-		if r >= 'a' && r <= 'z' {
-			upper += string(r - 32)
-		} else {
-			upper += string(r)
-		}
-	}
-	if _, err := p.CreateUser(ctx, upper, "other-hash", nil); err != ErrEmailTaken {
-		t.Fatalf("case-insensitive duplicate err = %v, want ErrEmailTaken", err)
+	upper := strings.ToUpper(u.Username)
+	if _, err := p.CreateUser(ctx, upper, "other-hash"); err != ErrUsernameTaken {
+		t.Fatalf("case-insensitive duplicate err = %v, want ErrUsernameTaken", err)
 	}
 
-	byEmail, err := p.FindUserByEmail(ctx, upper)
+	byName, err := p.FindUserByUsername(ctx, upper)
 	if err != nil {
-		t.Fatalf("FindUserByEmail (upper): %v", err)
+		t.Fatalf("FindUserByUsername (upper): %v", err)
 	}
-	if byEmail.ID != u.ID {
-		t.Fatalf("FindUserByEmail id=%d want %d", byEmail.ID, u.ID)
+	if byName.ID != u.ID {
+		t.Fatalf("FindUserByUsername id=%d want %d", byName.ID, u.ID)
 	}
 	byID, err := p.FindUserByID(ctx, u.ID)
 	if err != nil {
 		t.Fatalf("FindUserByID: %v", err)
 	}
-	if byID.Email != u.Email {
-		t.Fatalf("FindUserByID email=%q want %q", byID.Email, u.Email)
+	if byID.Username != u.Username {
+		t.Fatalf("FindUserByID username=%q want %q", byID.Username, u.Username)
 	}
-	if _, err := p.FindUserByEmail(ctx, "nobody-here@example.com"); err != ErrNotFound {
-		t.Fatalf("missing email err = %v, want ErrNotFound", err)
+	if _, err := p.FindUserByUsername(ctx, "nobody_here_ever"); err != ErrNotFound {
+		t.Fatalf("missing username err = %v, want ErrNotFound", err)
 	}
 }
 

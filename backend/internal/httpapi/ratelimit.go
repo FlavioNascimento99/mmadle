@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// RateLimiter is a fixed-window counter per key (IP, email, ...). It bounds
+// RateLimiter is a fixed-window counter per key (IP, username, ...). It bounds
 // brute-force login/register attempts; it is not a general traffic shaper.
 // Backed by an in-memory map: limits reset on restart, which is acceptable
 // for a single-container backend (documented; move to Redis/DB if scaled out).

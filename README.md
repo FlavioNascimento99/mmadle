@@ -168,6 +168,8 @@ See `.env.example`. Summary:
 | `GAME_TIMEZONE`      | backend | `UTC`                                    |
 | `SESSION_TTL`        | backend | `720h` (Go duration; session cookie lifetime) |
 | `SESSION_COOKIE_SECURE` | backend | `true`, except `false` for plain-http local dev |
+| `ADMIN_USERNAMES`    | backend | comma-separated admin allowlist (auto-promotes on login) |
+| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` | backend (prod: Worker secrets) | enables `GET /api/admin/cloudflare/workers` |
 | `MIGRATIONS_DIR`     | backend | `migrations` (`/app/migrations` in Docker) |
 | `NEXT_PUBLIC_API_URL`| frontend| unset (same-origin); `http://localhost:8080` in `next dev` |
 | `TEST_DATABASE_URL`  | backend tests | postgres URL for integration tests |
@@ -213,12 +215,14 @@ winner's portrait. Fighters without a free photo get an initials fallback.
 | GET    | `/api/fighters`         | full roster, alphabetical, same minimal fields as search |
 | GET    | `/api/fighters/search?q=` | case-insensitive partial match, max 8 results, minimal fields |
 | POST   | `/api/game/guess`       | `{"fighter_id": 8}` → structured comparison (see below) |
-| POST   | `/api/auth/register`    | `{"email","password","display_name?"}` → account + session cookie |
-| POST   | `/api/auth/login`       | `{"email","password"}` → session cookie (errors never reveal whether the email exists) |
+| POST   | `/api/auth/register`    | `{"username","password"}` → account + session cookie |
+| POST   | `/api/auth/login`       | `{"username","password"}` → session cookie (errors never reveal whether the username exists) |
 | POST   | `/api/auth/logout`      | clears the session cookie (idempotent)   |
 | GET    | `/api/auth/me`          | signed-in account, or 401 for guests     |
 | GET    | `/api/me/guesses`       | `?pool=&date=` → signed-in history, re-evaluated server-side |
 | POST   | `/api/me/import`        | `{"pool","date","fighter_ids":[]}` → import local guesses after sign-in |
+| GET    | `/api/admin/metrics/overview` | `?days=` → signups, games, win rate, pools, top fighters (admin role only; 404 otherwise) |
+| GET    | `/api/admin/cloudflare/workers` | `?days=` → Worker requests/errors/CPU via GraphQL proxy (admin only; 501 without secrets) |
 
 Guess response (values are the **guessed** fighter's; target stays hidden):
 
@@ -277,14 +281,22 @@ npm run lint && npm run typecheck && npm run build
    integer columns; comparison requires all four to match.
 8. Frontend persists guesses in `localStorage` per game date; the backend
    remains the authority on correctness (no auth in MVP).
-9. **Accounts are first-class but optional.** Registration is email + password
-   (argon2id) with an optional display name; sessions are opaque tokens in an
+9. **Accounts are first-class but optional.** Registration is username +
+   password (argon2id); sessions are opaque tokens in an
    `HttpOnly; Secure; SameSite=Lax` cookie, stored hashed server-side with
    rotation on login. Signed-in guesses are recorded in `game_guesses` and
    re-evaluated on read, so another device restores the same board and
    client-supplied outcomes are never trusted. Login errors are identical for
-   unknown emails and wrong passwords; state-changing routes require
+   unknown usernames and wrong passwords; state-changing routes require
    `Content-Type: application/json` as a CSRF defense alongside SameSite=Lax.
+10. **Admins unlock `/admin` (metrics).** `users.role` (`player`/`admin`,
+    migration 010) gates the admin API; usernames in `ADMIN_USERNAMES`
+    auto-promote on login. The overview derives signups, games, win rate,
+    pool splits and top fighters from the game records (guests stay
+    invisible). Worker requests/errors/CPU come from the Cloudflare GraphQL
+    Analytics API through an admin-only proxy, so the API token never reaches
+    browsers; page views/visits need the Web Analytics beacon (site token
+    from the dashboard, snippet in the frontend).
 
 ## Future extension points
 
