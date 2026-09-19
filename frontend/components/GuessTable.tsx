@@ -69,7 +69,7 @@ export function GuessTable({ guesses }: { guesses: GuessOutcome[] }) {
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6" role="rowgroup">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5" role="rowgroup">
                 <Cell
                   label="Age"
                   display={`${g.results.age.value}`}
@@ -83,7 +83,6 @@ export function GuessTable({ guesses }: { guesses: GuessOutcome[] }) {
                   comparison={g.results.height.comparison}
                   hint={orderedHint(g.results.height.comparison, "taller", "shorter")}
                 />
-                <Cell label="Record" display={g.results.record.value} comparison={g.results.record.comparison} />
                 <Cell label="Nation" display={g.results.nationality.value} comparison={g.results.nationality.comparison} />
                 <Cell label="Last event" display={g.results.last_event.value} comparison={g.results.last_event.comparison} />
               </div>
