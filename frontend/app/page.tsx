@@ -4,19 +4,30 @@ import { useEffect, useState } from "react";
 import { AuthDialog } from "@/components/AuthDialog";
 import { Header, Shell } from "@/components/Header";
 import { GameBoard } from "@/components/GameBoard";
+import { Splash } from "@/components/Splash";
 import { fetchToday } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
 export default function Page() {
   const [gameDate, setGameDate] = useState("");
+  const [booted, setBooted] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const { user, authBusy, authError, clearAuthError, login, register, logout } = useAuth();
 
   useEffect(() => {
     fetchToday()
       .then((t) => setGameDate(t.date))
-      .catch(() => setGameDate(""));
+      .catch(() => setGameDate(""))
+      .finally(() => setBooted(true));
   }, []);
+
+  if (!booted) {
+    return (
+      <Shell>
+        <Splash />
+      </Shell>
+    );
+  }
 
   return (
     <Shell>
