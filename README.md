@@ -220,6 +220,7 @@ winner's portrait. Fighters without a free photo get an initials fallback.
 | POST   | `/api/auth/logout`      | clears the session cookie (idempotent)   |
 | GET    | `/api/auth/me`          | signed-in account, or 401 for guests     |
 | GET    | `/api/me/guesses`       | `?pool=&date=` → signed-in history, re-evaluated server-side |
+| GET    | `/api/me/stats`         | personal stats: win rate, streaks, tries, distribution, recent games |
 | POST   | `/api/me/import`        | `{"pool","date","fighter_ids":[]}` → import local guesses after sign-in |
 | GET    | `/api/admin/metrics/overview` | `?days=` → signups, games, win rate, pools, top fighters (admin role only; 404 otherwise) |
 | GET    | `/api/admin/cloudflare/workers` | `?days=` → Worker requests/errors/CPU via GraphQL proxy (admin only; 501 without secrets) |

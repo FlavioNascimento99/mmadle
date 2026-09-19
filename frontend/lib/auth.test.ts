@@ -3,6 +3,7 @@ import {
   fetchCFWorkers,
   fetchMe,
   fetchMyGuesses,
+  fetchMyStats,
   fetchOverview,
   importGuesses,
   login,
@@ -138,5 +139,40 @@ describe("admin metrics", () => {
     };
     stubFetch(200, report);
     await expect(fetchCFWorkers(7)).resolves.toEqual(report);
+  });
+});
+
+describe("my stats", () => {
+  it("fetches personal stats with credentials", async () => {
+    const stats = {
+      pools: {
+        all: {
+          games_played: 3, games_won: 2, win_rate: 2 / 3,
+          current_streak: 1, max_streak: 1, avg_tries: 4, avg_tries_to_win: 3,
+          distribution: { "2": 1, "4": 1 }, days_played: 3,
+        },
+        men: {
+          games_played: 0, games_won: 0, win_rate: 0,
+          current_streak: 0, max_streak: 0, avg_tries: 0, avg_tries_to_win: 0,
+          distribution: {}, days_played: 0,
+        },
+      },
+      games_total: 3,
+      games_won: 2,
+      win_rate: 2 / 3,
+      days_played: 3,
+      avg_tries_per_day: 4,
+      recent_games: [{ date: "2026-09-18", pool: "all", guesses: 2, won: true }],
+    };
+    stubFetch(200, stats);
+    await expect(fetchMyStats()).resolves.toEqual(stats);
+    expect(fetch).toHaveBeenCalledWith("/api/me/stats", expect.objectContaining({
+      credentials: "include",
+    }));
+  });
+
+  it("surfaces 401 for guests", async () => {
+    stubFetch(401, { error: "unauthenticated" });
+    await expect(fetchMyStats()).rejects.toThrow(/401/);
   });
 });

@@ -47,6 +47,12 @@ export function Header({
               <div className="absolute right-0 z-20 mt-3 w-64 border-3 border-ink bg-bone p-4 text-sm text-ink shadow-blood-lg">
                 <p className="break-all font-bold">@{user.username}</p>
                 <p className="mt-1 text-steel">Signed in — guesses sync across devices.</p>
+                <Link
+                  href="/stats"
+                  className="press mt-3 block border-3 border-ink bg-bone px-3 py-1.5 text-center font-semibold text-ink"
+                >
+                  My stats
+                </Link>
                 {user.role === "admin" && (
                   <Link
                     href="/admin"

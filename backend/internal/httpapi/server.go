@@ -47,6 +47,8 @@ type Server struct {
 	SessionSecure bool
 	// AdminMetrics backs /api/admin/metrics/* (nil in tests for other routes).
 	AdminMetrics store.AdminStore
+	// Stats backs /api/me/stats (nil in tests for other routes).
+	Stats store.StatsStore
 	// AdminUsernames is the normalized allowlist auto-promoting admins.
 	AdminUsernames map[string]bool
 	// CloudflareToken/Account enable /api/admin/cloudflare/* (Worker secrets).
@@ -89,6 +91,7 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/me/guesses", s.handleMyGuesses)
 	s.mux.HandleFunc("/api/me/import", s.handleImport)
+	s.mux.HandleFunc("/api/me/stats", s.handleMyStats)
 	s.mux.HandleFunc("/api/admin/metrics/overview", s.handleAdminOverview)
 	s.mux.HandleFunc("/api/admin/cloudflare/workers", s.handleCloudflareWorkers)
 	return s
