@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchDailyStats, fetchHints, listFighters, searchFighters, submitGuess } from "./api";
+import { fetchAdminUsers, fetchDailyStats, fetchHints, listFighters, searchFighters, setUserActive, submitGuess } from "./api";
 
 const stubFetch = (status: number, body: unknown) =>
   vi.stubGlobal(
@@ -88,5 +88,36 @@ describe("fetchDailyStats", () => {
   it("throws on an unexpected payload shape", async () => {
     stubFetch(200, { solvers: "many" });
     await expect(fetchDailyStats("all")).rejects.toThrow(/unexpected API response shape/);
+  });
+});
+
+describe("admin users", () => {
+  it("fetches the paginated account listing", async () => {
+    const page = {
+      total: 2,
+      active: 1,
+      users: [
+        { id: 2, username: "octagon_fan", role: "player", is_active: false, created_at: "2026-09-17T10:00:00Z", last_login_at: null, games: 3, won: 1 },
+      ],
+    };
+    stubFetch(200, page);
+    await expect(fetchAdminUsers("oct", 20, 0)).resolves.toEqual(page);
+    expect(fetch).toHaveBeenCalledWith("/api/admin/users?q=oct&limit=20&offset=0", expect.objectContaining({
+      credentials: "include",
+    }));
+  });
+
+  it("posts the activation switch", async () => {
+    stubFetch(200, { user_id: 2, active: false });
+    await expect(setUserActive(2, false)).resolves.toEqual({ user_id: 2, active: false });
+    expect(fetch).toHaveBeenCalledWith("/api/admin/users/active", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ user_id: 2, active: false }),
+    }));
+  });
+
+  it("surfaces toggle failures", async () => {
+    stubFetch(404, { error: "user_not_found" });
+    await expect(setUserActive(999, true)).rejects.toThrow(/404/);
   });
 });

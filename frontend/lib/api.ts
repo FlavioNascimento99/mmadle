@@ -322,3 +322,40 @@ export async function fetchMyStats(): Promise<UserStats> {
   });
   return parseOrThrow(res, UserStatsSchema, "Loading your stats");
 }
+
+/** One account row for the admin users view. */
+export const AdminUserSchema = z.object({
+  id: z.number(),
+  username: z.string(),
+  role: z.string(),
+  is_active: z.boolean(),
+  created_at: z.string(),
+  last_login_at: z.string().nullable(),
+  games: z.number(),
+  won: z.number(),
+});
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+
+export const UsersPageSchema = z.object({
+  total: z.number(),
+  active: z.number(),
+  users: z.array(AdminUserSchema),
+});
+export type UsersPage = z.infer<typeof UsersPageSchema>;
+
+export async function fetchAdminUsers(q: string, limit: number, offset: number): Promise<UsersPage> {
+  const res = await fetch(
+    `${apiBase()}/api/admin/users?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  return parseOrThrow(res, UsersPageSchema, "Loading accounts");
+}
+
+export const SetActiveResultSchema = z.object({ user_id: z.number(), active: z.boolean() });
+export type SetActiveResult = z.infer<typeof SetActiveResultSchema>;
+
+export async function setUserActive(userId: number, active: boolean): Promise<SetActiveResult> {
+  const res = await fetch(`${apiBase()}/api/admin/users/active`, authInit("POST", { user_id: userId, active }));
+  if (!res.ok) throw await authError(res, "Updating account");
+  return parseOrThrow(res, SetActiveResultSchema, "Updating account");
+}

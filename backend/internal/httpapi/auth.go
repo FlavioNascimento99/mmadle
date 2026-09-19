@@ -92,8 +92,8 @@ func decodeStrict(w http.ResponseWriter, r *http.Request, dst any) bool {
 }
 
 // currentUser resolves the session cookie to its account. ok=false means
-// guest (no cookie, unknown or expired token): callers treat that as
-// unauthenticated, never as an error.
+// guest (no cookie, unknown or expired token) or a deactivated account:
+// callers treat that as unauthenticated, never as an error.
 func (s *Server) currentUser(r *http.Request) (user store.User, ok bool) {
 	if s.Auth == nil {
 		return store.User{}, false
@@ -105,7 +105,7 @@ func (s *Server) currentUser(r *http.Request) (user store.User, ok bool) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	u, err := s.Auth.FindSessionUser(ctx, domain.HashSessionToken(cookie.Value), s.Clock.Now())
-	if err != nil {
+	if err != nil || !u.IsActive {
 		return store.User{}, false
 	}
 	return u, true
@@ -237,6 +237,9 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !s.issueSession(ctx, w, user.ID) {
 		return
 	}
+	if err := s.Auth.TouchLastLogin(ctx, user.ID, s.Clock.Now()); err != nil {
+		s.Logger.Error("last login stamp failed", "user_id", user.ID)
+	}
 	s.maybePromote(ctx, &user)
 	writeJSON(w, http.StatusCreated, toUserResponse(user))
 }
@@ -280,12 +283,21 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "username or password is incorrect")
 		return
 	}
+	if !user.IsActive {
+		// Deactivated accounts answer exactly like a wrong password: the
+		// lockout itself is never advertised.
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "username or password is incorrect")
+		return
+	}
 	// Drop the presented session, if any, before issuing the fresh one.
 	if cookie, cerr := r.Cookie(sessionCookieName); cerr == nil && cookie.Value != "" {
 		_ = s.Auth.DeleteSession(ctx, domain.HashSessionToken(cookie.Value))
 	}
 	if !s.issueSession(ctx, w, user.ID) {
 		return
+	}
+	if err := s.Auth.TouchLastLogin(ctx, user.ID, s.Clock.Now()); err != nil {
+		s.Logger.Error("last login stamp failed", "user_id", user.ID)
 	}
 	s.maybePromote(ctx, &user)
 	writeJSON(w, http.StatusOK, toUserResponse(user))

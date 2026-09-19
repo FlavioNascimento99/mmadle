@@ -49,4 +49,25 @@ type MetricsOverview struct {
 // AdminStore is the persistence port for the metrics interface.
 type AdminStore interface {
 	MetricsOverview(ctx context.Context, days int) (MetricsOverview, error)
+	ListUsers(ctx context.Context, q string, limit, offset int) (UsersPage, error)
+}
+
+// AdminUser is one account row: identity, status and lifetime game totals.
+// Timestamps serialize as RFC3339; LastLoginAt is null until the first login.
+type AdminUser struct {
+	ID          int64   `json:"id"`
+	Username    string  `json:"username"`
+	Role        string  `json:"role"`
+	IsActive    bool    `json:"is_active"`
+	CreatedAt   string  `json:"created_at"`
+	LastLoginAt *string `json:"last_login_at"`
+	Games       int     `json:"games"`
+	GamesWon    int     `json:"won"`
+}
+
+// UsersPage is one slice of the account listing plus the filtered totals.
+type UsersPage struct {
+	Total  int         `json:"total"`
+	Active int         `json:"active"`
+	Users  []AdminUser `json:"users"`
 }

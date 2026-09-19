@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Header, Shell } from "@/components/Header";
 import {
+  fetchAdminUsers,
   fetchCFWorkers,
   fetchOverview,
+  setUserActive,
+  type AdminUser,
   type CFWorkers,
   type MetricsOverview,
+  type UsersPage,
 } from "@/lib/api";
 import { LangProvider, useLang } from "@/lib/i18n";
 import { useAuth } from "@/lib/useAuth";
@@ -64,6 +68,32 @@ function AdminView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Accounts listing (independent from the metrics above).
+  const USERS_LIMIT = 20;
+  const [usersPage, setUsersPage] = useState<UsersPage | null>(null);
+  const [usersQ, setUsersQ] = useState("");
+  const [usersOffset, setUsersOffset] = useState(0);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const usersReq = useRef(0);
+
+  const loadUsers = useCallback(async (q: string, offset: number) => {
+    const id = ++usersReq.current;
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const page = await fetchAdminUsers(q, USERS_LIMIT, offset);
+      if (usersReq.current !== id) return; // superseded by a newer search
+      setUsersPage(page);
+    } catch {
+      if (usersReq.current !== id) return;
+      setUsersError(t("admin.usersError"));
+    } finally {
+      if (usersReq.current === id) setUsersLoading(false);
+    }
+  }, [t]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -83,6 +113,39 @@ function AdminView() {
   }, [authLoading, user, load]);
 
   const isAdmin = user?.role === "admin";
+
+  // Live search (debounced) + pagination for the accounts listing.
+  useEffect(() => {
+    if (authLoading || !isAdmin) return;
+    const id = setTimeout(() => void loadUsers(usersQ, usersOffset), 250);
+    return () => clearTimeout(id);
+  }, [authLoading, isAdmin, usersQ, usersOffset, loadUsers]);
+
+  const onSearchUsers = (q: string) => {
+    setUsersQ(q);
+    setUsersOffset(0);
+  };
+
+  const onToggleActive = async (u: AdminUser) => {
+    if (u.id === user?.id || togglingId !== null) return;
+    setTogglingId(u.id);
+    setUsersError(null);
+    try {
+      await setUserActive(u.id, !u.is_active);
+      await loadUsers(usersQ, usersOffset);
+    } catch {
+      setUsersError(t("admin.toggleError"));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const fmtDateTime = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  };
 
   return (
     <Shell>
@@ -136,6 +199,124 @@ function AdminView() {
                   <Card label={t("admin.winRate")} value={`${Math.round(overview.win_rate * 100)}%`} sub={t("admin.wonSub", { n: overview.games_won })} />
                   <Card label={t("admin.avgWin")} value={overview.avg_guesses_to_win.toFixed(1)} />
                   <Card label={t("admin.accounts")} value={String(overview.signups_total)} sub={t("admin.signupsSub")} />
+                </div>
+              </section>
+
+              <section aria-label={t("admin.users")}>
+                <h3 className="mb-3 font-display text-2xl uppercase text-bone">{t("admin.users")}</h3>
+                {usersPage && (
+                  <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                    <Card label={t("admin.accounts")} value={String(usersPage.total)} />
+                    <Card label={t("admin.active")} value={String(usersPage.active)} />
+                    <Card label={t("admin.deactivated")} value={String(usersPage.total - usersPage.active)} />
+                  </div>
+                )}
+                <div className="border-3 border-bone bg-ink p-4">
+                  <div className="mb-3">
+                    <input
+                      type="search"
+                      value={usersQ}
+                      onChange={(e) => onSearchUsers(e.target.value)}
+                      placeholder={t("admin.searchUsers")}
+                      aria-label={t("admin.searchUsers")}
+                      className="w-full border-3 border-bone bg-bone px-3 py-1.5 text-sm text-ink placeholder:text-steel"
+                    />
+                  </div>
+                  {usersError ? (
+                    <p className="text-sm font-semibold text-blood" role="alert">{usersError}</p>
+                  ) : usersPage === null || usersLoading ? (
+                    <p className="text-sm text-steel">{t("admin.loading")}</p>
+                  ) : usersPage.users.length === 0 ? (
+                    <p className="text-sm text-steel">{t("admin.noData")}</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="text-steel">
+                              <th className="py-1 pr-2">{t("admin.thUser")}</th>
+                              <th className="py-1 pr-2">{t("admin.thRole")}</th>
+                              <th className="py-1 pr-2">{t("admin.thStatus")}</th>
+                              <th className="py-1 pr-2">{t("admin.thCreated")}</th>
+                              <th className="py-1 pr-2">{t("admin.thLastLogin")}</th>
+                              <th className="py-1 pr-2 text-right">{t("admin.thGames")}</th>
+                              <th className="py-1 pr-2 text-right">{t("admin.thWon")}</th>
+                              <th className="py-1 text-right">{t("admin.thActions")}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {usersPage.users.map((u) => {
+                              const self = u.id === user?.id;
+                              return (
+                                <tr key={u.id} className="border-t border-bone/20 text-bone">
+                                  <td className="py-1.5 pr-2 font-semibold">
+                                    @{u.username}
+                                    {self && <span className="ml-1 text-xs text-steel">({t("admin.you")})</span>}
+                                  </td>
+                                  <td className="py-1.5 pr-2">{u.role}</td>
+                                  <td className="py-1.5 pr-2">
+                                    <span className={`inline-block border-2 border-ink px-1.5 py-0.5 text-xs font-bold ${u.is_active ? "bg-blood text-bone" : "bg-bone text-ink"}`}>
+                                      {u.is_active ? t("admin.active") : t("admin.inactive")}
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap py-1.5 pr-2 font-mono text-xs">{fmtDateTime(u.created_at)}</td>
+                                  <td className="whitespace-nowrap py-1.5 pr-2 font-mono text-xs">
+                                    {u.last_login_at ? fmtDateTime(u.last_login_at) : t("admin.never")}
+                                  </td>
+                                  <td className="py-1.5 pr-2 text-right">{u.games}</td>
+                                  <td className="py-1.5 pr-2 text-right">{u.won}</td>
+                                  <td className="py-1.5 text-right">
+                                    {self ? (
+                                      <span className="text-xs text-steel">—</span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        disabled={togglingId !== null}
+                                        onClick={() => void onToggleActive(u)}
+                                        title={u.is_active ? t("admin.deactivate") : t("admin.activate")}
+                                        aria-label={`${u.is_active ? t("admin.deactivate") : t("admin.activate")} @${u.username}`}
+                                        aria-pressed={u.is_active}
+                                        className={`press border-2 border-bone px-2 py-0.5 text-xs font-bold disabled:opacity-50 ${u.is_active ? "bg-ink text-steel" : "bg-blood text-bone"}`}
+                                      >
+                                        {togglingId === u.id ? "…" : u.is_active ? t("admin.deactivate") : t("admin.activate")}
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-sm">
+                        <span className="text-steel">
+                          {t("admin.pageOf", {
+                            from: usersPage.total === 0 ? 0 : usersOffset + 1,
+                            to: Math.min(usersOffset + USERS_LIMIT, usersPage.total),
+                            total: usersPage.total,
+                          })}
+                        </span>
+                        <span className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={usersOffset === 0 || usersLoading}
+                            onClick={() => setUsersOffset(Math.max(0, usersOffset - USERS_LIMIT))}
+                            className="press border-2 border-bone px-2 py-0.5 font-semibold text-bone disabled:opacity-50"
+                          >
+                            {t("admin.prev")}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={usersLoading || usersOffset + USERS_LIMIT >= usersPage.total}
+                            onClick={() => setUsersOffset(usersOffset + USERS_LIMIT)}
+                            className="press border-2 border-bone px-2 py-0.5 font-semibold text-bone disabled:opacity-50"
+                          >
+                            {t("admin.next")}
+                          </button>
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </section>
 
