@@ -11,6 +11,7 @@ type HintKind string
 const (
 	HintNationality HintKind = "nationality"
 	HintDivision    HintKind = "division"
+	HintLastEvent   HintKind = "last_event"
 	HintNickname    HintKind = "nickname"
 	HintInitials    HintKind = "initials"
 )
@@ -40,6 +41,7 @@ type hintRule struct {
 var hintRules = []hintRule{
 	{3, HintNationality, "Nationality", func(f FighterView) string { return f.Nationality }},
 	{5, HintDivision, "Division", func(f FighterView) string { return f.Division }},
+	{6, HintLastEvent, "Last event", func(f FighterView) string { return f.LastEvent }},
 	{7, HintNickname, "Nickname", nicknameHint},
 	{9, HintInitials, "Initials", initials},
 }
