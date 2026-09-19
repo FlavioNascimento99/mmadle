@@ -31,7 +31,7 @@ export function DailySolvers({ pool, refreshKey }: { pool: Pool; refreshKey: num
   if (solvers === null) return null;
 
   return (
-    <p className="text-sm text-steel" aria-live="polite">
+    <p className="text-center text-sm text-steel" aria-live="polite">
       <span className="font-display text-xl text-bone">{solvers}</span>{" "}
       {solvers === 1 ? "player has" : "players have"} solved today
     </p>
