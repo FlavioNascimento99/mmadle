@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchHints, listFighters, searchFighters, submitGuess } from "./api";
+import { fetchDailyStats, fetchHints, listFighters, searchFighters, submitGuess } from "./api";
 
 const stubFetch = (status: number, body: unknown) =>
   vi.stubGlobal(
@@ -74,5 +74,19 @@ describe("fetchHints", () => {
   it("accepts a fully unlocked result", async () => {
     stubFetch(200, { hints: [], next_at: null });
     await expect(fetchHints(0, "all")).resolves.toEqual({ hints: [], next_at: null });
+  });
+});
+
+describe("fetchDailyStats", () => {
+  it("requests the solvers count for the pool", async () => {
+    const stats = { date: "2026-09-18", pool: "men", solvers: 3 };
+    stubFetch(200, stats);
+    await expect(fetchDailyStats("men")).resolves.toEqual(stats);
+    expect(fetch).toHaveBeenCalledWith("/api/game/stats?pool=men", { cache: "no-store" });
+  });
+
+  it("throws on an unexpected payload shape", async () => {
+    stubFetch(200, { solvers: "many" });
+    await expect(fetchDailyStats("all")).rejects.toThrow(/unexpected API response shape/);
   });
 });

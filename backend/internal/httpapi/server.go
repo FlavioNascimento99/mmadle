@@ -85,6 +85,7 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	s.mux.HandleFunc("/api/fighters/search", s.handleSearch)
 	s.mux.HandleFunc("/api/game/guess", s.handleGuess)
 	s.mux.HandleFunc("/api/game/hints", s.handleHints)
+	s.mux.HandleFunc("/api/game/stats", s.handleDailyStats)
 	s.mux.HandleFunc("/api/auth/register", s.handleRegister)
 	s.mux.HandleFunc("/api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("/api/auth/logout", s.handleLogout)
@@ -303,6 +304,12 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 	// Signed-in guesses are recorded server-side (best-effort); guests are
 	// untouched and the response never waits on the write failing.
 	s.recordGuessBestEffort(r, pool, gameDate, outcome)
+	// Every solve counts towards the public counter, logged in or not
+	// (guests via their anon identity); must run before writeJSON so a
+	// newly issued anon cookie lands on the response.
+	if outcome.Correct {
+		s.recordSolveBestEffort(w, r, pool, gameDate)
+	}
 	writeJSON(w, http.StatusOK, outcome)
 }
 

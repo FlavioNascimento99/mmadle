@@ -23,6 +23,7 @@ type fakeStore struct {
 	roster  []store.SearchResult
 	pingOK  bool
 	gotPool domain.Pool
+	solves  map[string]bool
 }
 
 func (f *fakeStore) GameFighterIDs(ctx context.Context, pool domain.Pool) ([]int, error) {
@@ -50,6 +51,23 @@ func (f *fakeStore) Ping(ctx context.Context) error {
 	if !f.pingOK {
 		return errors.New("db down")
 	}
+	return nil
+}
+func (f *fakeStore) CountDailySolvers(_ context.Context, pool domain.Pool, gameDate time.Time) (int, error) {
+	prefix := string(pool) + "|" + gameDate.UTC().Format("2006-01-02") + "|"
+	n := 0
+	for k := range f.solves {
+		if strings.HasPrefix(k, prefix) {
+			n++
+		}
+	}
+	return n, nil
+}
+func (f *fakeStore) RecordDailySolve(_ context.Context, pool domain.Pool, gameDate time.Time, identity string) error {
+	if f.solves == nil {
+		f.solves = map[string]bool{}
+	}
+	f.solves[string(pool)+"|"+gameDate.UTC().Format("2006-01-02")+"|"+identity] = true
 	return nil
 }
 

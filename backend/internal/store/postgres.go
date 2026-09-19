@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"mmadle/backend/internal/domain"
 
@@ -19,6 +20,11 @@ type FighterStore interface {
 	FighterView(ctx context.Context, id int) (domain.FighterView, error)
 	SearchFighters(ctx context.Context, pool domain.Pool, q string, limit int) ([]SearchResult, error)
 	ListFighters(ctx context.Context, pool domain.Pool) ([]SearchResult, error)
+	// CountDailySolvers counts distinct players who solved the daily game
+	// for one pool + date, guests included via anonymous identities.
+	CountDailySolvers(ctx context.Context, pool domain.Pool, gameDate time.Time) (int, error)
+	// RecordDailySolve stores one solve idempotently (repeat solves dedupe).
+	RecordDailySolve(ctx context.Context, pool domain.Pool, gameDate time.Time, identity string) error
 	Ping(ctx context.Context) error
 }
 

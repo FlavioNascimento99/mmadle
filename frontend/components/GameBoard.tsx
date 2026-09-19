@@ -14,6 +14,7 @@ import { shareText } from "@/lib/game";
 import { usePool } from "@/lib/usePool";
 import { useSavedGuesses } from "@/lib/useSavedGuesses";
 import { SearchBar } from "./SearchBar";
+import { DailySolvers } from "./DailySolvers";
 import { GuessTable } from "./GuessTable";
 import { HintPanel } from "./HintPanel";
 import { ModeToggle } from "./ModeToggle";
@@ -154,6 +155,7 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
   return (
     <div className="space-y-6">
       <ModeToggle pool={pool} disabled={submitting} onChange={setPool} />
+      <DailySolvers pool={pool} refreshKey={guesses.length} />
 
       {showImportBanner && (
         <div className="border-3 border-bone bg-bruise px-3 py-2 text-sm text-bone" role="status">

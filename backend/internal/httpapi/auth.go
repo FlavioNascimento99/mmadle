@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -509,6 +510,13 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 			s.Logger.Error("import record failed", "user_id", user.ID)
 			writeError(w, http.StatusInternalServerError, "import_failed", "could not import guesses")
 			return
+		}
+		if outcome.Correct {
+			// Imported solves count too, under the account identity; the
+			// counter stays best-effort and never fails the import.
+			if err := s.Store.RecordDailySolve(ctx, pool, day, fmt.Sprintf("u:%d", user.ID)); err != nil {
+				s.Logger.Error("import solve record failed", "user_id", user.ID)
+			}
 		}
 		outcomes = append(outcomes, outcome)
 	}

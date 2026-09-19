@@ -188,6 +188,7 @@ on startup and tracked in `schema_migrations`:
 - `007_add_fighter_photo_credit.sql` — mandatory attribution whenever a photo is set
 - `008_add_division_gender.sql` — `men`/`women` on divisions for pool filtering
 - `009_auth.sql` — `users`, `sessions` (hashed opaque tokens), `game_guesses`
+- `012_daily_solves.sql` — `daily_solves` (per-player solve identities incl. guests, backfilled from `game_guesses`)
 - `seed.sql` — demo dataset (applied separately, see below)
 
 ## Seed / data import
@@ -215,6 +216,7 @@ winner's portrait. Fighters without a free photo get an initials fallback.
 | GET    | `/api/fighters`         | full roster, alphabetical, same minimal fields as search |
 | GET    | `/api/fighters/search?q=` | case-insensitive partial match, max 8 results, minimal fields |
 | POST   | `/api/game/guess`       | `{"fighter_id": 8}` → structured comparison (see below) |
+| GET    | `/api/game/stats`       | `?pool=` → `{"date","pool","solvers"}` — distinct solvers today, logged in or not (public; guests via anon id) |
 | POST   | `/api/auth/register`    | `{"username","password"}` → account + session cookie |
 | POST   | `/api/auth/login`       | `{"username","password"}` → session cookie (errors never reveal whether the username exists) |
 | POST   | `/api/auth/logout`      | clears the session cookie (idempotent)   |

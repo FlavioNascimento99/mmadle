@@ -128,6 +128,21 @@ export async function fetchHints(guesses: number, pool: Pool): Promise<Hints> {
   return parseOrThrow(res, HintsSchema, "Loading hints");
 }
 
+/** How many players solved today's daily game in one pool, logged in or not. */
+export const DailyStatsSchema = z.object({
+  date: z.string(),
+  pool: z.string(),
+  solvers: z.number(),
+});
+export type DailyStats = z.infer<typeof DailyStatsSchema>;
+
+export async function fetchDailyStats(pool: Pool): Promise<DailyStats> {
+  const res = await fetch(`${apiBase()}/api/game/stats?pool=${pool}`, {
+    cache: "no-store",
+  });
+  return parseOrThrow(res, DailyStatsSchema, "Loading daily stats");
+}
+
 /** Signed-in account. Password hashes never leave the backend. */
 export const AuthUserSchema = z.object({
   id: z.number(),
