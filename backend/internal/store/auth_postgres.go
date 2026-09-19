@@ -18,9 +18,9 @@ func (p *Postgres) CreateUser(ctx context.Context, username, passwordHash string
 	err := p.pool.QueryRow(ctx, `
 INSERT INTO users (username, password_hash)
 VALUES ($1, $2)
-RETURNING id, username, password_hash, role, created_at`,
+RETURNING id, username, password_hash, role, is_active, created_at, last_login_at`,
 		username, passwordHash).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -37,9 +37,9 @@ RETURNING id, username, password_hash, role, created_at`,
 func (p *Postgres) FindUserByUsername(ctx context.Context, username string) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT id, username, password_hash, role, created_at
+SELECT id, username, password_hash, role, is_active, created_at, last_login_at
 FROM users WHERE username = $1`, username).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -54,9 +54,9 @@ FROM users WHERE username = $1`, username).Scan(
 func (p *Postgres) FindUserByID(ctx context.Context, id int64) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT id, username, password_hash, role, created_at
+SELECT id, username, password_hash, role, is_active, created_at, last_login_at
 FROM users WHERE id = $1`, id).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -82,10 +82,10 @@ INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)`,
 func (p *Postgres) FindSessionUser(ctx context.Context, tokenHash string, now time.Time) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT u.id, u.username, u.password_hash, u.role, u.created_at
+SELECT u.id, u.username, u.password_hash, u.role, u.is_active, u.created_at, u.last_login_at
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1 AND s.expires_at > $2`, tokenHash, now).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -171,6 +171,38 @@ ORDER BY guess_index ASC`, userID, string(pool), gameDay(gameDate))
 func (p *Postgres) SetUserRole(ctx context.Context, userID int64, role string) error {
 	_, err := p.pool.Exec(ctx, `UPDATE users SET role = $2 WHERE id = $1`, userID, role)
 	return err
+}
+
+// TouchLastLogin stamps a successful login. Best-effort admin info: callers
+// log failures but never fail the login over it.
+func (p *Postgres) TouchLastLogin(ctx context.Context, userID int64, now time.Time) error {
+	_, err := p.pool.Exec(ctx, `UPDATE users SET last_login_at = $2 WHERE id = $1`, userID, now)
+	return err
+}
+
+// SetUserActive (de)activates an account. Deactivating drops every session
+// so the lockout takes effect immediately, including the admin's own
+// presented session (callers guard self-deactivation first). Unknown ids
+// are ErrNotFound.
+func (p *Postgres) SetUserActive(ctx context.Context, userID int64, active bool) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	res, err := tx.Exec(ctx, `UPDATE users SET is_active = $2 WHERE id = $1`, userID, active)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if !active {
+		if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // gameDay formats a game timestamp as a calendar DATE string for storage.

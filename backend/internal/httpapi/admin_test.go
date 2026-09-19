@@ -11,13 +11,20 @@ import (
 	"mmadle/backend/internal/store"
 )
 
-// fakeAdminStore returns a canned overview for handler tests.
-type fakeAdminStore struct{ overview store.MetricsOverview }
+// fakeAdminStore returns canned admin payloads for handler tests.
+type fakeAdminStore struct {
+	overview store.MetricsOverview
+	users    store.UsersPage
+}
 
 func (f *fakeAdminStore) MetricsOverview(ctx context.Context, days int) (store.MetricsOverview, error) {
 	out := f.overview
 	out.Days = days
 	return out, nil
+}
+
+func (f *fakeAdminStore) ListUsers(ctx context.Context, q string, limit, offset int) (store.UsersPage, error) {
+	return f.users, nil
 }
 
 // adminTestServer wires game fixtures + in-memory auth + canned metrics.

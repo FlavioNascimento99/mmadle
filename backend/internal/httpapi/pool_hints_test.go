@@ -98,6 +98,21 @@ func TestHints(t *testing.T) {
 		t.Fatalf("next_at=%v want 5", out.NextAt)
 	}
 
+	// After 6 guesses the target's last event joins nationality + division.
+	rec = serve(srv, http.MethodGet, "/api/game/hints?guesses=6", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Hints) != 3 || out.Hints[2].Kind != domain.HintLastEvent || out.Hints[2].Value != "UFC 320" {
+		t.Fatalf("6-guess hints = %+v, want last_event UFC 320 third", out.Hints)
+	}
+	if out.NextAt == nil || *out.NextAt != 7 {
+		t.Fatalf("next_at=%v want 7", out.NextAt)
+	}
+
 	rec = serve(srv, http.MethodGet, "/api/game/hints?guesses=9&pool=men", "")
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)

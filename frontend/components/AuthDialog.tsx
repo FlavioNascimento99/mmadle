@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useClickOutside } from "@/lib/useClickOutside";
+import { useLang } from "@/lib/i18n";
 
 type Props = {
   open: boolean;
@@ -17,6 +18,7 @@ type Props = {
  * default: this dialog only ever opens from the header's Sign in button.
  */
 export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: Props) {
+  const { t } = useLang();
   const [tab, setTab] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -52,27 +54,27 @@ export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: 
   };
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-ink/80 p-4" role="dialog" aria-modal="true" aria-label={tab === "login" ? "Sign in" : "Create account"}>
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-ink/80 p-4" role="dialog" aria-modal="true" aria-label={t(tab === "login" ? "auth.signIn" : "auth.create")}>
       <div ref={ref} className="w-full max-w-sm border-3 border-bone bg-ink p-5 shadow-blood-lg">
-        <div className="mb-4 flex border-3 border-bone" role="tablist" aria-label="Account">
-          {(["login", "register"] as const).map((t) => (
+        <div className="mb-4 flex border-3 border-bone" role="tablist" aria-label={t("auth.tabs")}>
+          {(["login", "register"] as const).map((mode) => (
             <button
-              key={t}
+              key={mode}
               role="tab"
-              aria-selected={tab === t}
-              onClick={() => setTab(t)}
+              aria-selected={tab === mode}
+              onClick={() => setTab(mode)}
               className={`flex-1 px-3 py-2 font-display text-lg uppercase tracking-wide ${
-                tab === t ? "bg-blood text-bone" : "bg-ink text-steel"
+                tab === mode ? "bg-blood text-bone" : "bg-ink text-steel"
               }`}
             >
-              {t === "login" ? "Sign in" : "Join"}
+              {mode === "login" ? t("auth.signIn") : t("auth.join")}
             </button>
           ))}
         </div>
 
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-sm font-semibold text-bone">
-            Username
+            {t("auth.username")}
             <input
               type="text"
               required
@@ -86,7 +88,7 @@ export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: 
             />
           </label>
           <label className="block text-sm font-semibold text-bone">
-            Password
+            {t("auth.password")}
             <input
               type="password"
               required
@@ -95,7 +97,7 @@ export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full border-3 border-bone bg-ink px-3 py-2 text-bone placeholder:text-steel/60"
-              placeholder="At least 10 characters"
+              placeholder={t("auth.passwordPh")}
             />
           </label>
           {error && (
@@ -109,19 +111,19 @@ export function AuthDialog({ open, busy, error, onLogin, onRegister, onClose }: 
               disabled={busy}
               className="press flex-1 border-3 border-bone bg-blood px-3 py-2 font-display text-lg uppercase text-bone shadow-blood disabled:opacity-60"
             >
-              {busy ? "Working…" : tab === "login" ? "Sign in" : "Create account"}
+              {busy ? t("auth.working") : tab === "login" ? t("auth.signIn") : t("auth.create")}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="press border-3 border-bone bg-ink px-3 py-2 font-semibold text-steel"
             >
-              Later
+              {t("auth.later")}
             </button>
           </div>
         </form>
         <p className="mt-3 text-xs text-steel">
-          Accounts keep your guesses across devices. Playing without one keeps working exactly as before.
+          {t("auth.note")}
         </p>
       </div>
     </div>

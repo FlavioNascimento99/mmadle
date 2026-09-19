@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listFighters, type Pool, type SearchResult } from "@/lib/api";
 import { findTypeaheadIndex, groupRoster } from "@/lib/fighter";
 import { useClickOutside } from "@/lib/useClickOutside";
+import { useLang } from "@/lib/i18n";
 import { FighterOption } from "./FighterOption";
 
 type Props = {
@@ -16,6 +17,7 @@ type Props = {
 const optionId = (index: number) => `roster-option-${index}`;
 
 export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [roster, setRoster] = useState<SearchResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +38,8 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
     setError(null);
     try {
       setRoster(await listFighters(pool));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load fighters");
+    } catch {
+      setError(t("roster.loadError"));
     }
   };
 
@@ -158,7 +160,7 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
         >
           {g.letter}
         </p>
-        <ul role="group" aria-label={`Fighters starting with ${g.letter}`}>
+        <ul role="group" aria-label={t("roster.group", { letter: g.letter })}>
           {g.fighters.map((f) => {
             flatIndex += 1;
             const current = flatIndex;
@@ -200,7 +202,7 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
         aria-haspopup="listbox"
         className="press w-full border-3 border-ink bg-blood px-4 py-3.5 text-lg font-bold text-bone shadow-[4px_4px_0_0_#FAFAF7] disabled:opacity-50"
       >
-        All fighters <span aria-hidden="true">{open ? "▴" : "▾"}</span>
+        {t("roster.all")} <span aria-hidden="true">{open ? "▴" : "▾"}</span>
       </button>
       {open && (
         <div
@@ -213,17 +215,17 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
             </p>
           ) : roster === null ? (
             <p className="px-4 py-3 text-sm" role="status">
-              Loading fighters…
+              {t("roster.loading")}
             </p>
           ) : (
             <>
               <p className="border-b-3 border-ink bg-ink px-4 py-2 text-sm font-semibold text-bone">
-                {roster.length} fighters
-                <span className="ml-2 font-normal text-bone/70">↑↓ navigate · Enter selects</span>
+                {t("roster.count", { n: roster.length })}
+                <span className="ml-2 font-normal text-bone/70">{t("roster.keyboardHint")}</span>
               </p>
               <div
                 role="listbox"
-                aria-label="All fighters"
+                aria-label={t("roster.list")}
                 aria-activedescendant={activeIndex !== null ? optionId(activeIndex) : undefined}
                 tabIndex={-1}
                 onKeyDown={onListKeyDown}

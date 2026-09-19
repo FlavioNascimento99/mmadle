@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchHints, type Hints, type Pool } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 type Props = {
   pool: Pool;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function HintPanel({ pool, guessCount }: Props) {
+  const { t } = useLang();
   const [hints, setHints] = useState<Hints | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -26,7 +28,7 @@ export function HintPanel({ pool, guessCount }: Props) {
   if (failed) {
     return (
       <p className="text-sm text-steel" role="alert">
-        Hints unavailable right now.
+        {t("hints.unavailable")}
       </p>
     );
   }
@@ -35,7 +37,7 @@ export function HintPanel({ pool, guessCount }: Props) {
   const remaining = hints.next_at === null ? 0 : hints.next_at - guessCount;
 
   return (
-    <section aria-label="Hints" aria-live="polite" className="space-y-3">
+    <section aria-label={t("hints.title")} aria-live="polite" className="space-y-3">
       {hints.hints.length > 0 && (
         <ul className="flex flex-wrap gap-3">
           {hints.hints.map((hint) => (
@@ -48,7 +50,7 @@ export function HintPanel({ pool, guessCount }: Props) {
       )}
       {remaining > 0 && (
         <p className="text-sm text-steel">
-          Next hint in {remaining} {remaining === 1 ? "guess" : "guesses"}
+          {t("hints.next", { n: remaining, unit: t(remaining === 1 ? "hints.guessOne" : "hints.guessMany") })}
         </p>
       )}
     </section>

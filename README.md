@@ -189,6 +189,7 @@ on startup and tracked in `schema_migrations`:
 - `008_add_division_gender.sql` — `men`/`women` on divisions for pool filtering
 - `009_auth.sql` — `users`, `sessions` (hashed opaque tokens), `game_guesses`
 - `012_daily_solves.sql` — `daily_solves` (per-player solve identities incl. guests, backfilled from `game_guesses`)
+- `014_user_status.sql` — `users.last_login_at`, `users.is_active` (sessions dropped on deactivation; last login backfilled from sessions)
 - `seed.sql` — demo dataset (applied separately, see below)
 
 ## Seed / data import
@@ -218,13 +219,18 @@ winner's portrait. Fighters without a free photo get an initials fallback.
 | POST   | `/api/game/guess`       | `{"fighter_id": 8}` → structured comparison (see below) |
 | GET    | `/api/game/stats`       | `?pool=` → `{"date","pool","solvers"}` — distinct solvers today, logged in or not (public; guests via anon id) |
 | POST   | `/api/auth/register`    | `{"username","password"}` → account + session cookie |
-| POST   | `/api/auth/login`       | `{"username","password"}` → session cookie (errors never reveal whether the username exists) |
+| POST   | `/api/auth/login`       | `{"username","password"}` → session cookie (errors never reveal whether the username exists or is deactivated) |
 | POST   | `/api/auth/logout`      | clears the session cookie (idempotent)   |
 | GET    | `/api/auth/me`          | signed-in account, or 401 for guests     |
 | GET    | `/api/me/guesses`       | `?pool=&date=` → signed-in history, re-evaluated server-side |
 | GET    | `/api/me/stats`         | personal stats: win rate, streaks, tries, distribution, recent games |
+| POST   | `/api/infinite/rounds`    | `{"pool"}` → opaque round id with 5 lives (never the target) |
+| POST   | `/api/infinite/guess`     | `{"round_id","fighter_id"}` → outcome + lives; death reveals the answer |
+| GET    | `/api/me/infinite/record` | `?pool=` → account best/current survival streak |
 | POST   | `/api/me/import`        | `{"pool","date","fighter_ids":[]}` → import local guesses after sign-in |
 | GET    | `/api/admin/metrics/overview` | `?days=` → signups, games, win rate, pools, top fighters (admin role only; 404 otherwise) |
+| GET    | `/api/admin/users` | `?q=&limit=&offset=` → account listing with status + lifetime totals (admin only; 404 otherwise) |
+| POST   | `/api/admin/users/active` | `{"user_id","active"}` → activation switch; deactivation drops sessions (admin only; self-deactivation refused) |
 | GET    | `/api/admin/cloudflare/workers` | `?days=` → Worker requests/errors/CPU via GraphQL proxy (admin only; 501 without secrets) |
 
 Guess response (values are the **guessed** fighter's; target stays hidden):

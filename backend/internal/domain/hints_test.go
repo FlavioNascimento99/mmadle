@@ -4,7 +4,7 @@ import "testing"
 
 func hintTarget() FighterView {
 	nick := "El Matador"
-	return FighterView{Name: "Ilia Topuria", Nickname: &nick, Nationality: "Georgia", Division: "Lightweight"}
+	return FighterView{Name: "Ilia Topuria", Nickname: &nick, Nationality: "Georgia", Division: "Lightweight", LastEvent: "UFC 320"}
 }
 
 func TestHintsUnlockProgressively(t *testing.T) {
@@ -16,9 +16,11 @@ func TestHintsUnlockProgressively(t *testing.T) {
 		{0, nil, 3},
 		{2, nil, 3},
 		{3, []HintKind{HintNationality}, 5},
-		{6, []HintKind{HintNationality, HintDivision}, 7},
-		{9, []HintKind{HintNationality, HintDivision, HintNickname, HintInitials}, 0},
-		{50, []HintKind{HintNationality, HintDivision, HintNickname, HintInitials}, 0},
+		{5, []HintKind{HintNationality, HintDivision}, 6},
+		{6, []HintKind{HintNationality, HintDivision, HintLastEvent}, 7},
+		{7, []HintKind{HintNationality, HintDivision, HintLastEvent, HintNickname}, 9},
+		{9, []HintKind{HintNationality, HintDivision, HintLastEvent, HintNickname, HintInitials}, 0},
+		{50, []HintKind{HintNationality, HintDivision, HintLastEvent, HintNickname, HintInitials}, 0},
 	}
 	for _, tc := range cases {
 		got := Hints(hintTarget(), tc.guesses)
@@ -42,7 +44,7 @@ func TestHintsUnlockProgressively(t *testing.T) {
 
 func TestHintValues(t *testing.T) {
 	got := Hints(hintTarget(), 9).Hints
-	want := []string{"Georgia", "Lightweight", "El Matador", "I. T."}
+	want := []string{"Georgia", "Lightweight", "UFC 320", "El Matador", "I. T."}
 	for i, w := range want {
 		if got[i].Value != w || got[i].Label == "" {
 			t.Fatalf("hint %d = %+v, want value %q with a label", i, got[i], w)
@@ -53,10 +55,10 @@ func TestHintValues(t *testing.T) {
 func TestHintsHandleMissingNicknameAndUnicodeNames(t *testing.T) {
 	target := FighterView{Name: "Jiří Procházka", Nationality: "Czech Republic", Division: "Light Heavyweight"}
 	got := Hints(target, 9).Hints
-	if got[2].Value != "No nickname" {
-		t.Fatalf("nickname hint = %q", got[2].Value)
+	if got[3].Value != "No nickname" {
+		t.Fatalf("nickname hint = %q", got[3].Value)
 	}
-	if got[3].Value != "J. P." {
-		t.Fatalf("initials hint = %q", got[3].Value)
+	if got[4].Value != "J. P." {
+		t.Fatalf("initials hint = %q", got[4].Value)
 	}
 }

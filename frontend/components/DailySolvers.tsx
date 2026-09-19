@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchDailyStats, type Pool } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Public solvers count for today's daily game in the active pool.
@@ -11,6 +12,7 @@ import { fetchDailyStats, type Pool } from "@/lib/api";
  * anonymous browser identity issued on their first solve).
  */
 export function DailySolvers({ pool, refreshKey }: { pool: Pool; refreshKey: number }) {
+  const { t } = useLang();
   const [solvers, setSolvers] = useState<number | null>(null);
 
   useEffect(() => {
@@ -31,9 +33,9 @@ export function DailySolvers({ pool, refreshKey }: { pool: Pool; refreshKey: num
   if (solvers === null) return null;
 
   return (
-    <p className="text-sm text-steel" aria-live="polite">
+    <p className="text-center text-sm text-steel" aria-live="polite">
       <span className="font-display text-xl text-bone">{solvers}</span>{" "}
-      {solvers === 1 ? "player has" : "players have"} solved today
+      {t(solvers === 1 ? "solvers.one" : "solvers.many", { n: solvers })}
     </p>
   );
 }

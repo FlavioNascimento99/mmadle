@@ -47,7 +47,7 @@ func (f *fakeAuthStore) CreateUser(ctx context.Context, username, passwordHash s
 	if _, taken := f.byName[username]; taken {
 		return store.User{}, store.ErrUsernameTaken
 	}
-	u := store.User{ID: f.nextID, Username: username, PasswordHash: passwordHash, Role: "player", CreatedAt: time.Now()}
+	u := store.User{ID: f.nextID, Username: username, PasswordHash: passwordHash, Role: "player", IsActive: true, CreatedAt: time.Now()}
 	f.nextID++
 	f.users[u.ID] = u
 	f.byName[username] = u.ID
@@ -113,6 +113,37 @@ func (f *fakeAuthStore) SetUserRole(ctx context.Context, userID int64, role stri
 	u := f.users[userID]
 	u.Role = role
 	f.users[userID] = u
+	return nil
+}
+
+func (f *fakeAuthStore) TouchLastLogin(ctx context.Context, userID int64, now time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.users[userID]
+	if !ok {
+		return store.ErrNotFound
+	}
+	u.LastLoginAt = &now
+	f.users[userID] = u
+	return nil
+}
+
+func (f *fakeAuthStore) SetUserActive(ctx context.Context, userID int64, active bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.users[userID]
+	if !ok {
+		return store.ErrNotFound
+	}
+	u.IsActive = active
+	f.users[userID] = u
+	if !active {
+		for hash, row := range f.sessions {
+			if row.userID == userID {
+				delete(f.sessions, hash)
+			}
+		}
+	}
 	return nil
 }
 

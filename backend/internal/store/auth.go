@@ -21,13 +21,17 @@ var (
 
 // User is a player account. PasswordHash is the argon2id PHC string and must
 // never leave the backend (no JSON tags on purpose). Role gates the admin
-// metrics interface; 'player' is the default.
+// metrics interface; 'player' is the default. LastLoginAt is NULL until the
+// first login (migration 013 backfills from sessions); IsActive false locks
+// the account out (sessions are dropped on deactivation).
 type User struct {
 	ID           int64
 	Username     string
 	PasswordHash string
 	Role         string
+	IsActive     bool
 	CreatedAt    time.Time
+	LastLoginAt  *time.Time
 }
 
 // GameGuess is one persisted daily guess. Outcomes are never stored: they are
@@ -53,4 +57,9 @@ type AuthStore interface {
 	ListGuesses(ctx context.Context, userID int64, pool domain.Pool, gameDate time.Time) ([]GameGuess, error)
 	// SetUserRole changes an account's role (promotion/demotion path).
 	SetUserRole(ctx context.Context, userID int64, role string) error
+	// TouchLastLogin stamps a successful login; best-effort admin info.
+	TouchLastLogin(ctx context.Context, userID int64, now time.Time) error
+	// SetUserActive (de)activates an account. Deactivating drops every
+	// session so the lockout is immediate; unknown ids are ErrNotFound.
+	SetUserActive(ctx context.Context, userID int64, active bool) error
 }

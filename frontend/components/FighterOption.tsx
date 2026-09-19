@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import type { SearchResult } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 import { FighterPhoto } from "./FighterPhoto";
 
 type Props = {
@@ -16,6 +17,7 @@ export const FighterOption = forwardRef<HTMLButtonElement, Props>(function Fight
   { fighter, guessed, active = false, optionId, onPick, onHighlight }: Props,
   ref,
 ) {
+  const { t } = useLang();
   return (
     <li className="border-b-2 border-ink last:border-b-0">
       <button
@@ -37,7 +39,7 @@ export const FighterOption = forwardRef<HTMLButtonElement, Props>(function Fight
         <span className="min-w-0">
           <span className="block truncate font-bold">
             {fighter.name}
-            {guessed ? " (guessed)" : ""}
+            {guessed ? t("option.guessed") : ""}
           </span>
           <span className="block truncate text-xs opacity-75">
             {[fighter.nickname && `“${fighter.nickname}”`, fighter.division, fighter.nationality]

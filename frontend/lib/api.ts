@@ -128,7 +128,7 @@ export async function fetchHints(guesses: number, pool: Pool): Promise<Hints> {
   return parseOrThrow(res, HintsSchema, "Loading hints");
 }
 
-/** How many signed-in players solved today's daily game in one pool. */
+/** How many players solved today's daily game in one pool, logged in or not. */
 export const DailyStatsSchema = z.object({
   date: z.string(),
   pool: z.string(),
@@ -321,4 +321,103 @@ export async function fetchMyStats(): Promise<UserStats> {
     cache: "no-store",
   });
   return parseOrThrow(res, UserStatsSchema, "Loading your stats");
+}
+
+/** An opened infinity-round: opaque id plus full lives. Never the target. */
+export const RoundSchema = z.object({
+  round_id: z.string(),
+  lives: z.number(),
+  pool: PoolSchema,
+});
+export type Round = z.infer<typeof RoundSchema>;
+
+/** Guess outcome plus round state. Answer only arrives with death; streak
+ * fields only for signed-in players (guests track bests in the browser). */
+export const InfiniteGuessSchema = GuessOutcomeSchema.extend({
+  lives_left: z.number(),
+  solved: z.boolean(),
+  round_over: z.boolean(),
+  answer: z
+    .object({
+      name: z.string(),
+      photo_url: z.string().nullable(),
+      photo_credit: z.string().nullable(),
+    })
+    .nullish(),
+  streak: z.number().optional(),
+  best: z.number().optional(),
+  new_best: z.boolean().optional(),
+});
+export type InfiniteGuess = z.infer<typeof InfiniteGuessSchema>;
+
+export async function createRound(pool: Pool): Promise<Round> {
+  const res = await fetch(`${apiBase()}/api/infinite/rounds`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ pool }),
+  });
+  return parseOrThrow(res, RoundSchema, "Starting round");
+}
+
+export async function guessInfinite(roundId: string, fighterId: number): Promise<InfiniteGuess> {
+  const res = await fetch(`${apiBase()}/api/infinite/guess`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ round_id: roundId, fighter_id: fighterId }),
+  });
+  return parseOrThrow(res, InfiniteGuessSchema, "Submitting guess");
+}
+
+export const InfiniteRecordSchema = z.object({
+  best_streak: z.number(),
+  current_streak: z.number(),
+});
+export type InfiniteRecord = z.infer<typeof InfiniteRecordSchema>;
+
+/** The account's survival run (auth required). */
+export async function fetchInfiniteRecord(pool: Pool): Promise<InfiniteRecord> {
+  const res = await fetch(`${apiBase()}/api/me/infinite/record?pool=${pool}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return parseOrThrow(res, InfiniteRecordSchema, "Loading record");
+}
+
+/** One account row for the admin users view. */
+export const AdminUserSchema = z.object({
+  id: z.number(),
+  username: z.string(),
+  role: z.string(),
+  is_active: z.boolean(),
+  created_at: z.string(),
+  last_login_at: z.string().nullable(),
+  games: z.number(),
+  won: z.number(),
+});
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+
+export const UsersPageSchema = z.object({
+  total: z.number(),
+  active: z.number(),
+  users: z.array(AdminUserSchema),
+});
+export type UsersPage = z.infer<typeof UsersPageSchema>;
+
+export async function fetchAdminUsers(q: string, limit: number, offset: number): Promise<UsersPage> {
+  const res = await fetch(
+    `${apiBase()}/api/admin/users?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  return parseOrThrow(res, UsersPageSchema, "Loading accounts");
+}
+
+export const SetActiveResultSchema = z.object({ user_id: z.number(), active: z.boolean() });
+export type SetActiveResult = z.infer<typeof SetActiveResultSchema>;
+
+export async function setUserActive(userId: number, active: boolean): Promise<SetActiveResult> {
+  const res = await fetch(`${apiBase()}/api/admin/users/active`, authInit("POST", { user_id: userId, active }));
+  if (!res.ok) throw await authError(res, "Updating account");
+  return parseOrThrow(res, SetActiveResultSchema, "Updating account");
 }
