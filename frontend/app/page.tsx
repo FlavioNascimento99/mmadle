@@ -4,10 +4,19 @@ import { useEffect, useState } from "react";
 import { AuthDialog } from "@/components/AuthDialog";
 import { Header, Shell } from "@/components/Header";
 import { GameBoard } from "@/components/GameBoard";
+import { InfiniteBoard } from "@/components/InfiniteBoard";
 import { Splash } from "@/components/Splash";
 import { LangProvider, useLang } from "@/lib/i18n";
 import { fetchToday } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+
+type GameMode = "daily" | "infinite";
+
+const MODE_KEY = "mmadle-mode";
+
+function parseMode(raw: string | null): GameMode {
+  return raw === "infinite" ? "infinite" : "daily";
+}
 
 export default function Page() {
   return (
@@ -22,7 +31,25 @@ function Home() {
   const [gameDate, setGameDate] = useState("");
   const [booted, setBooted] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [mode, setModeState] = useState<GameMode>("daily");
   const { user, authBusy, authError, clearAuthError, login, register, logout } = useAuth();
+
+  useEffect(() => {
+    try {
+      setModeState(parseMode(localStorage.getItem(MODE_KEY)));
+    } catch {
+      // Storage blocked: daily stays the default.
+    }
+  }, []);
+
+  const setMode = (next: GameMode) => {
+    setModeState(next);
+    try {
+      localStorage.setItem(MODE_KEY, next);
+    } catch {
+      // Storage blocked: mode still works in-memory.
+    }
+  };
 
   useEffect(() => {
     fetchToday()
@@ -51,8 +78,22 @@ function Home() {
         onSignOut={() => void logout()}
       />
       <main className="mx-auto max-w-5xl space-y-8 px-4 py-8">
-        <section aria-label={t("board.dailyGame")}>
-          <GameBoard user={user} />
+        <div className="flex border-3 border-bone" role="group" aria-label={t("mode.group")}>
+          {(["daily", "infinite"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              aria-pressed={mode === m}
+              className={`px-4 py-2 font-display text-lg uppercase tracking-wide ${
+                mode === m ? "bg-blood text-bone" : "bg-ink text-steel"
+              }`}
+            >
+              {t(m === "daily" ? "mode.daily" : "mode.infinite")}
+            </button>
+          ))}
+        </div>
+        <section aria-label={mode === "daily" ? t("board.dailyGame") : t("mode.infinite")}>
+          {mode === "daily" ? <GameBoard user={user} /> : <InfiniteBoard user={user} />}
         </section>
         <footer className="border-t-2 border-bone/20 pt-4 text-xs text-steel">
           {t("board.footer")}

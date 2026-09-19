@@ -322,3 +322,65 @@ export async function fetchMyStats(): Promise<UserStats> {
   });
   return parseOrThrow(res, UserStatsSchema, "Loading your stats");
 }
+
+/** An opened infinity-round: opaque id plus full lives. Never the target. */
+export const RoundSchema = z.object({
+  round_id: z.string(),
+  lives: z.number(),
+  pool: PoolSchema,
+});
+export type Round = z.infer<typeof RoundSchema>;
+
+/** Guess outcome plus round state. Answer only arrives with death; streak
+ * fields only for signed-in players (guests track bests in the browser). */
+export const InfiniteGuessSchema = GuessOutcomeSchema.extend({
+  lives_left: z.number(),
+  solved: z.boolean(),
+  round_over: z.boolean(),
+  answer: z
+    .object({
+      name: z.string(),
+      photo_url: z.string().nullable(),
+      photo_credit: z.string().nullable(),
+    })
+    .nullish(),
+  streak: z.number().optional(),
+  best: z.number().optional(),
+  new_best: z.boolean().optional(),
+});
+export type InfiniteGuess = z.infer<typeof InfiniteGuessSchema>;
+
+export async function createRound(pool: Pool): Promise<Round> {
+  const res = await fetch(`${apiBase()}/api/infinite/rounds`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ pool }),
+  });
+  return parseOrThrow(res, RoundSchema, "Starting round");
+}
+
+export async function guessInfinite(roundId: string, fighterId: number): Promise<InfiniteGuess> {
+  const res = await fetch(`${apiBase()}/api/infinite/guess`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ round_id: roundId, fighter_id: fighterId }),
+  });
+  return parseOrThrow(res, InfiniteGuessSchema, "Submitting guess");
+}
+
+export const InfiniteRecordSchema = z.object({
+  best_streak: z.number(),
+  current_streak: z.number(),
+});
+export type InfiniteRecord = z.infer<typeof InfiniteRecordSchema>;
+
+/** The account's survival run (auth required). */
+export async function fetchInfiniteRecord(pool: Pool): Promise<InfiniteRecord> {
+  const res = await fetch(`${apiBase()}/api/me/infinite/record?pool=${pool}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return parseOrThrow(res, InfiniteRecordSchema, "Loading record");
+}

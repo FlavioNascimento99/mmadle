@@ -145,6 +145,7 @@ func main() {
 	srv.AdminUsernames = adminUsernames()
 	srv.AdminMetrics = st
 	srv.Stats = st
+	srv.Infinite = st
 	srv.CloudflareToken = os.Getenv("CLOUDFLARE_API_TOKEN")
 	srv.CloudflareAccount = os.Getenv("CLOUDFLARE_ACCOUNT_ID")
 	addr := ":" + port

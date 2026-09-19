@@ -49,6 +49,8 @@ type Server struct {
 	AdminMetrics store.AdminStore
 	// Stats backs /api/me/stats (nil in tests for other routes).
 	Stats store.StatsStore
+	// Infinite backs /api/infinite/* (nil in tests for other routes).
+	Infinite store.InfiniteStore
 	// AdminUsernames is the normalized allowlist auto-promoting admins.
 	AdminUsernames map[string]bool
 	// CloudflareToken/Account enable /api/admin/cloudflare/* (Worker secrets).
@@ -59,6 +61,7 @@ type Server struct {
 	cfHTTPClient    *http.Client
 	authIPLimiter   *RateLimiter
 	authNameLimiter *RateLimiter
+	roundIPLimiter  *RateLimiter
 	mux             *http.ServeMux
 }
 
@@ -77,6 +80,7 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 		SessionSecure:   true,
 		authIPLimiter:   NewRateLimiter(30, 10*time.Minute, clk.Now),
 		authNameLimiter: NewRateLimiter(10, 10*time.Minute, clk.Now),
+		roundIPLimiter:  NewRateLimiter(60, 10*time.Minute, clk.Now),
 		mux:             http.NewServeMux(),
 	}
 	s.mux.HandleFunc("/api/health", s.handleHealth)
@@ -93,6 +97,9 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	s.mux.HandleFunc("/api/me/guesses", s.handleMyGuesses)
 	s.mux.HandleFunc("/api/me/import", s.handleImport)
 	s.mux.HandleFunc("/api/me/stats", s.handleMyStats)
+	s.mux.HandleFunc("/api/infinite/rounds", s.handleCreateRound)
+	s.mux.HandleFunc("/api/infinite/guess", s.handleInfiniteGuess)
+	s.mux.HandleFunc("/api/me/infinite/record", s.handleInfiniteRecord)
 	s.mux.HandleFunc("/api/admin/metrics/overview", s.handleAdminOverview)
 	s.mux.HandleFunc("/api/admin/cloudflare/workers", s.handleCloudflareWorkers)
 	return s

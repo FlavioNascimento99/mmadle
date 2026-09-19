@@ -223,6 +223,9 @@ winner's portrait. Fighters without a free photo get an initials fallback.
 | GET    | `/api/auth/me`          | signed-in account, or 401 for guests     |
 | GET    | `/api/me/guesses`       | `?pool=&date=` → signed-in history, re-evaluated server-side |
 | GET    | `/api/me/stats`         | personal stats: win rate, streaks, tries, distribution, recent games |
+| POST   | `/api/infinite/rounds`    | `{"pool"}` → opaque round id with 5 lives (never the target) |
+| POST   | `/api/infinite/guess`     | `{"round_id","fighter_id"}` → outcome + lives; death reveals the answer |
+| GET    | `/api/me/infinite/record` | `?pool=` → account best/current survival streak |
 | POST   | `/api/me/import`        | `{"pool","date","fighter_ids":[]}` → import local guesses after sign-in |
 | GET    | `/api/admin/metrics/overview` | `?days=` → signups, games, win rate, pools, top fighters (admin role only; 404 otherwise) |
 | GET    | `/api/admin/cloudflare/workers` | `?days=` → Worker requests/errors/CPU via GraphQL proxy (admin only; 501 without secrets) |

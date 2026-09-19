@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createRound,
   fetchCFWorkers,
+  fetchInfiniteRecord,
   fetchMe,
   fetchMyGuesses,
   fetchMyStats,
   fetchOverview,
+  guessInfinite,
   importGuesses,
   login,
   logout,
@@ -142,8 +145,7 @@ describe("admin metrics", () => {
   });
 });
 
-describe("my stats", () => {
-  it("fetches personal stats with credentials", async () => {
+describe("my stats", () => {  it("fetches personal stats with credentials", async () => {
     const stats = {
       pools: {
         all: {
@@ -174,5 +176,72 @@ describe("my stats", () => {
   it("surfaces 401 for guests", async () => {
     stubFetch(401, { error: "unauthenticated" });
     await expect(fetchMyStats()).rejects.toThrow(/401/);
+  });
+});
+
+describe("infinity mode", () => {
+  const outcome = {
+    fighter_id: 2,
+    fighter_name: "Guesser Fighter",
+    results: {
+      age: { value: 37, comparison: "lower" },
+      division: { value: "Lightweight", comparison: "correct" },
+      height: { value: 180, comparison: "higher" },
+      record: { value: "18-4-0", comparison: "incorrect" },
+      nationality: { value: "USA", comparison: "incorrect" },
+      last_event: { value: "UFC 319", comparison: "incorrect" },
+    },
+    correct: false,
+  };
+
+  it("opens a round with the pool", async () => {
+    stubFetch(201, { round_id: "a".repeat(32), lives: 5, pool: "men" });
+    await expect(createRound("men")).resolves.toEqual({
+      round_id: "a".repeat(32),
+      lives: 5,
+      pool: "men",
+    });
+    expect(fetch).toHaveBeenCalledWith("/api/infinite/rounds", expect.objectContaining({
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({ pool: "men" }),
+    }));
+  });
+
+  it("submits a guess with round state", async () => {
+    stubFetch(200, { ...outcome, lives_left: 4, solved: false, round_over: false });
+    const res = await guessInfinite("a".repeat(32), 2);
+    expect(res.lives_left).toBe(4);
+    expect(res.solved).toBe(false);
+    expect(res.answer).toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith("/api/infinite/guess", expect.objectContaining({
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({ round_id: "a".repeat(32), fighter_id: 2 }),
+    }));
+  });
+
+  it("parses death answers and account streaks", async () => {
+    stubFetch(200, {
+      ...outcome,
+      lives_left: 0,
+      solved: false,
+      round_over: true,
+      answer: { name: "Guesser Fighter", photo_url: null, photo_credit: null },
+      streak: 0,
+      best: 3,
+      new_best: false,
+    });
+    const res = await guessInfinite("a".repeat(32), 2);
+    expect(res.answer?.name).toBe("Guesser Fighter");
+    expect(res.best).toBe(3);
+  });
+
+  it("fetches the account record", async () => {
+    stubFetch(200, { best_streak: 4, current_streak: 2 });
+    await expect(fetchInfiniteRecord("all")).resolves.toEqual({ best_streak: 4, current_streak: 2 });
+    expect(fetch).toHaveBeenCalledWith("/api/me/infinite/record?pool=all", expect.objectContaining({
+      credentials: "include",
+    }));
   });
 });
