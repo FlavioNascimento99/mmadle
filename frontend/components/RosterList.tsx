@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listFighters, type Pool, type SearchResult } from "@/lib/api";
+import { findTypeaheadIndex, groupRoster } from "@/lib/fighter";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { useLang } from "@/lib/i18n";
 import { FighterOption } from "./FighterOption";
@@ -13,12 +14,18 @@ type Props = {
   onSelect: (fighter: SearchResult) => void;
 };
 
+const optionId = (index: number) => `roster-option-${index}`;
+
 export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [roster, setRoster] = useState<SearchResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Highlighted (keyboard/mouse) option; Enter confirms it. */
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const close = useCallback(() => setOpen(false), []);
   useClickOutside(boxRef, close);
@@ -37,18 +44,162 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
   };
 
   const pick = (f: SearchResult) => {
+    if (guessedIds.has(f.id)) return;
     onSelect(f);
     setOpen(false);
+  };
+
+  const groups = useMemo(() => (roster ? groupRoster(roster) : []), [roster]);
+
+  /** Display order (grouped); keyboard navigation indexes into this array. */
+  const ordered = useMemo(() => groups.flatMap((g) => g.fighters), [groups]);
+
+  const focusIndex = useCallback(
+    (index: number | null) => {
+      if (index === null || ordered.length === 0) return;
+      setActiveIndex(index);
+      // Wait a tick so the button exists when navigating right after open.
+      requestAnimationFrame(() => optionRefs.current[index]?.focus());
+    },
+    [ordered.length],
+  );
+
+  const step = useCallback(
+    (from: number | null, delta: 1 | -1): number | null => {
+      if (ordered.length === 0) return null;
+      let i = from ?? (delta === 1 ? -1 : ordered.length);
+      for (let n = 0; n < ordered.length; n += 1) {
+        i = (i + delta + ordered.length) % ordered.length;
+        if (!guessedIds.has(ordered[i].id)) return i;
+      }
+      return from;
+    },
+    [ordered, guessedIds],
+  );
+
+  const jumpToEdge = useCallback(
+    (edge: "first" | "last"): number | null => {
+      if (ordered.length === 0) return null;
+      if (edge === "first") {
+        const idx = ordered.findIndex((f) => !guessedIds.has(f.id));
+        return idx === -1 ? null : idx;
+      }
+      for (let i = ordered.length - 1; i >= 0; i -= 1) {
+        if (!guessedIds.has(ordered[i].id)) return i;
+      }
+      return null;
+    },
+    [ordered, guessedIds],
+  );
+
+  // When the list opens (or finishes loading), highlight the first
+  // selectable fighter and move focus into the list for keyboard users.
+  useEffect(() => {
+    if (!open || ordered.length === 0) return;
+    focusIndex(jumpToEdge("first"));
+  }, [open, ordered, focusIndex, jumpToEdge]);
+
+  // Return focus to the toggle when the list closes via keyboard.
+  const closeAndRefocus = useCallback(() => {
+    setOpen(false);
+    requestAnimationFrame(() => toggleRef.current?.focus());
+  }, []);
+
+  const onListKeyDown = (e: React.KeyboardEvent) => {
+    if (ordered.length === 0) return;
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        focusIndex(step(activeIndex, 1));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        focusIndex(step(activeIndex, -1));
+        break;
+      case "Home":
+        e.preventDefault();
+        focusIndex(jumpToEdge("first"));
+        break;
+      case "End":
+        e.preventDefault();
+        focusIndex(jumpToEdge("last"));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (activeIndex !== null && !guessedIds.has(ordered[activeIndex].id)) {
+          pick(ordered[activeIndex]);
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        closeAndRefocus();
+        break;
+      default:
+        // Single-letter type-ahead: jump to the next fighter whose first or
+        // last name starts with the typed character (cycles with repeats).
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const next = findTypeaheadIndex(ordered, activeIndex ?? -1, e.key);
+          if (next !== -1) {
+            e.preventDefault();
+            const target = guessedIds.has(ordered[next].id)
+              ? step(next, 1) ?? next
+              : next;
+            focusIndex(target);
+          }
+        }
+    }
+  };
+
+  const renderGroups = () => {
+    let flatIndex = -1;
+    return groups.map((g) => (
+      <div key={g.letter}>
+        <p
+          aria-hidden="true"
+          className="sticky top-0 border-y-2 border-ink bg-ink px-3 py-1 text-xs font-bold uppercase tracking-widest text-bone"
+        >
+          {g.letter}
+        </p>
+        <ul role="group" aria-label={t("roster.group", { letter: g.letter })}>
+          {g.fighters.map((f) => {
+            flatIndex += 1;
+            const current = flatIndex;
+            return (
+              <FighterOption
+                key={f.id}
+                ref={(el) => {
+                  optionRefs.current[current] = el;
+                }}
+                fighter={f}
+                guessed={guessedIds.has(f.id)}
+                active={activeIndex === current}
+                optionId={optionId(current)}
+                onPick={pick}
+                onHighlight={() => setActiveIndex(current)}
+              />
+            );
+          })}
+        </ul>
+      </div>
+    ));
   };
 
   return (
     <div ref={boxRef} className="relative shrink-0">
       <button
         type="button"
+        ref={toggleRef}
         disabled={disabled}
         onClick={toggle}
+        onKeyDown={(e) => {
+          if ((e.key === "ArrowDown" || e.key === "Enter") && !open) {
+            e.preventDefault();
+            toggle();
+          }
+        }}
         aria-expanded={open}
         aria-controls="roster-list"
+        aria-haspopup="listbox"
         className="press w-full border-3 border-ink bg-blood px-4 py-3.5 text-lg font-bold text-bone shadow-[4px_4px_0_0_#FAFAF7] disabled:opacity-50"
       >
         {t("roster.all")} <span aria-hidden="true">{open ? "▴" : "▾"}</span>
@@ -70,12 +221,18 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
             <>
               <p className="border-b-3 border-ink bg-ink px-4 py-2 text-sm font-semibold text-bone">
                 {t("roster.count", { n: roster.length })}
+                <span className="ml-2 font-normal text-bone/70">{t("roster.keyboardHint")}</span>
               </p>
-              <ul role="listbox" aria-label={t("roster.list")} className="max-h-96 overflow-auto">
-                {roster.map((f) => (
-                  <FighterOption key={f.id} fighter={f} guessed={guessedIds.has(f.id)} onPick={pick} />
-                ))}
-              </ul>
+              <div
+                role="listbox"
+                aria-label={t("roster.list")}
+                aria-activedescendant={activeIndex !== null ? optionId(activeIndex) : undefined}
+                tabIndex={-1}
+                onKeyDown={onListKeyDown}
+                className="max-h-96 overflow-auto"
+              >
+                {renderGroups()}
+              </div>
             </>
           )}
         </div>
