@@ -101,6 +101,8 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	s.mux.HandleFunc("/api/infinite/guess", s.handleInfiniteGuess)
 	s.mux.HandleFunc("/api/me/infinite/record", s.handleInfiniteRecord)
 	s.mux.HandleFunc("/api/admin/metrics/overview", s.handleAdminOverview)
+	s.mux.HandleFunc("/api/admin/users", s.handleAdminUsers)
+	s.mux.HandleFunc("/api/admin/users/active", s.handleAdminSetActive)
 	s.mux.HandleFunc("/api/admin/cloudflare/workers", s.handleCloudflareWorkers)
 	return s
 }
