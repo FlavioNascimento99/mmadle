@@ -1,15 +1,18 @@
 "use client";
 
+import { useLang } from "@/lib/i18n";
+
 /**
  * Full-screen splash shown while the app boots (first game load). Purely
  * presentational: no data fetching, so it can render before anything else.
  */
 export function Splash() {
+  const { t } = useLang();
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-ink"
       role="status"
-      aria-label="Loading MMAdle"
+      aria-label={t("splash.loading")}
     >
       <h1 className="animate-pulse font-display text-7xl uppercase leading-[0.85] tracking-tight text-bone sm:text-8xl">
         MMA<span className="text-blood">dle</span>
@@ -23,7 +26,7 @@ export function Splash() {
           />
         ))}
       </div>
-      <p className="text-sm text-steel">Warming up the octagon…</p>
+      <p className="text-sm text-steel">{t("splash.warming")}</p>
     </div>
   );
 }

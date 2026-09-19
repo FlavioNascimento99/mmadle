@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchMe, login as apiLogin, logout as apiLogout, register as apiRegister, type AuthUser } from "./api";
+import { DICTS, useLang, type Lang } from "./i18n";
 
 export type AuthState =
   | { status: "loading"; user: null }
@@ -12,6 +13,7 @@ export type AuthState =
  * changes (sign in/out).
  */
 export function useAuth() {
+  const { lang } = useLang();
   const [state, setState] = useState<AuthState>({ status: "loading", user: null });
   const [authError, setAuthError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,12 +33,12 @@ export function useAuth() {
       else setState({ status: "guest", user: null });
       return true;
     } catch (e) {
-      setAuthError(friendlyAuthError(e));
+      setAuthError(friendlyAuthError(e, lang));
       return false;
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [lang]);
 
   const login = useCallback((username: string, password: string) => run(() => apiLogin(username, password)), [run]);
   const register = useCallback(
@@ -58,14 +60,16 @@ export function useAuth() {
 }
 
 /** Backend messages are terse codes; map the common ones to UI copy. */
-function friendlyAuthError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : "Something went wrong";
-  if (/\(401\)/.test(msg)) return "Username or password is incorrect.";
-  if (/\(409\)/.test(msg)) return "That username is taken. Try signing in.";
-  if (/\(429\)/.test(msg)) return "Too many attempts. Wait a few minutes and try again.";
-  if (/weak_password/.test(msg)) return "Password must be at least 10 characters and not a common password.";
-  if (/invalid_username/.test(msg)) return "Username must be 3–20 letters, digits or underscores.";
-  if (/username_taken/.test(msg)) return "That username is taken. Try signing in.";
-  if (/failed/i.test(msg) && /fetch|network|load/i.test(msg)) return "Could not reach the server. Check your connection.";
-  return msg.length > 160 ? "Something went wrong. Try again." : msg;
+function friendlyAuthError(e: unknown, lang: Lang): string {
+  // t() without a provider: tiny local lookup so this stays callable in tests.
+  const t = (key: "auth.unauthorized" | "auth.taken" | "auth.rateLimited" | "auth.weakPassword" | "auth.badUsername" | "auth.offline" | "auth.failed"): string =>
+    DICTS[lang][key];
+  const msg = e instanceof Error ? e.message : t("auth.failed");
+  if (/\(401\)/.test(msg)) return t("auth.unauthorized");
+  if (/\(409\)/.test(msg) || /username_taken/.test(msg)) return t("auth.taken");
+  if (/\(429\)/.test(msg)) return t("auth.rateLimited");
+  if (/weak_password/.test(msg)) return t("auth.weakPassword");
+  if (/invalid_username/.test(msg)) return t("auth.badUsername");
+  if (/failed/i.test(msg) && /fetch|network|load/i.test(msg)) return t("auth.offline");
+  return msg.length > 160 ? t("auth.failed") : msg;
 }

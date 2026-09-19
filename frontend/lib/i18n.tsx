@@ -1,0 +1,431 @@
+"use client";
+
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+
+/**
+ * UI language: English or Brazilian Portuguese. Fighter data (names,
+ * divisions, nationalities, events) is API content and stays as stored;
+ * only the interface chrome is translated. No i18n library: one flat
+ * dictionary per language, `{var}` interpolation, explicit singular/plural
+ * keys chosen at the call site.
+ */
+
+export type Lang = "en" | "pt-BR";
+
+export const LANGS: { value: Lang; short: string; label: string }[] = [
+  { value: "en", short: "EN", label: "English" },
+  { value: "pt-BR", short: "PT", label: "Português (Brasil)" },
+];
+
+const STORAGE_KEY = "mmadle-lang";
+
+const en = {
+  "lang.group": "Language",
+  "header.tagline": "Guess today's hidden UFC fighter",
+  "header.taglineDate": "Guess today's hidden UFC fighter, {date}",
+  "header.signIn": "Sign in",
+  "header.account": "Account: {name}",
+  "header.signedIn": "Signed in — guesses sync across devices.",
+  "header.myStats": "My stats",
+  "header.metrics": "Metrics",
+  "header.signOut": "Sign out",
+  "header.howTo": "How to play",
+  "header.howIntro": "Pick a fighter. Each guess shows how close you are.",
+  "header.legLanded": "Landed: this attribute matches.",
+  "header.legHigher": "The hidden fighter is older or taller.",
+  "header.legLower": "The hidden fighter is younger or shorter.",
+  "header.legMiss": "Missed: no match.",
+  "header.howHints": "Stuck? Hints unlock as you keep guessing.",
+  "header.howPools": "Pick {pool} for a separate daily fighter from the men's divisions.",
+  "pool.all": "Men & women",
+  "pool.men": "Men only",
+  "pool.group": "Game mode",
+  "board.loading": "Loading today's game…",
+  "board.loadError": "Could not load game",
+  "board.evaluating": "Evaluating guess…",
+  "board.guessFailed": "Guess failed",
+  "board.syncFailed": "Syncing your guesses failed",
+  "board.clipboard": "Clipboard blocked — select the text manually.",
+  "board.guesses": "Guesses:",
+  "board.solved": ", solved",
+  "board.dailyGame": "Daily game",
+  "board.footer": "Fighter stats are approximate. Photos are by Wikimedia Commons contributors; each photo's author and licence show in its tooltip and under the winner's portrait.",
+  "search.label": "Search fighter",
+  "search.ph": "Search fighters",
+  "search.solvedPh": "Solved for today",
+  "search.searching": "Searching…",
+  "search.matches": "Matching fighters",
+  "search.noMatch": "No fighters match “{q}”. Try a first or last name, or browse all fighters.",
+  "table.empty": "No guesses yet. Search for a fighter above to throw your first guess.",
+  "table.history": "Guess history",
+  "table.guessN": "Guess {n}",
+  "table.correct": "✓ Correct",
+  "table.attrAge": "Age",
+  "table.attrDivision": "Division",
+  "table.attrHeight": "Height",
+  "table.attrRecord": "Record",
+  "table.attrNation": "Nation",
+  "table.attrEvent": "Last event",
+  "table.match": "match",
+  "table.noMatch": "no match",
+  "table.older": "older",
+  "table.younger": "younger",
+  "table.taller": "taller",
+  "table.shorter": "shorter",
+  "cmp.correct": "correct",
+  "cmp.higher": "target is higher",
+  "cmp.lower": "target is lower",
+  "cmp.incorrect": "incorrect",
+  "hints.unavailable": "Hints unavailable right now.",
+  "hints.title": "Hints",
+  "hints.next": "Next hint in {n} {unit}",
+  "hints.guessOne": "guess",
+  "hints.guessMany": "guesses",
+  "win.today": "Today's fighter",
+  "win.solvedIn": "Solved in {tries}",
+  "win.tryOne": "1 try",
+  "win.tryMany": "{n} tries",
+  "win.tomorrow": "That's today's fighter. A new one drops tomorrow.",
+  "win.share": "Share result",
+  "win.copied": "Copied to clipboard",
+  "win.photoOf": "Photo: {credit}",
+  "roster.all": "All fighters",
+  "roster.list": "All fighters",
+  "roster.loading": "Loading fighters…",
+  "roster.loadError": "Could not load fighters",
+  "roster.count": "{n} fighters",
+  "option.guessed": " (guessed)",
+  "photo.noPhoto": "{name} (no photo)",
+  "solvers.one": "{n} player has solved today",
+  "solvers.many": "{n} players have solved today",
+  "auth.signIn": "Sign in",
+  "auth.join": "Join",
+  "auth.create": "Create account",
+  "auth.tabs": "Account",
+  "auth.username": "Username",
+  "auth.password": "Password",
+  "auth.passwordPh": "At least 10 characters",
+  "auth.working": "Working…",
+  "auth.later": "Later",
+  "auth.note": "Accounts keep your guesses across devices. Playing without one keeps working exactly as before.",
+  "auth.unauthorized": "Username or password is incorrect.",
+  "auth.taken": "That username is taken. Try signing in.",
+  "auth.rateLimited": "Too many attempts. Wait a few minutes and try again.",
+  "auth.weakPassword": "Password must be at least 10 characters and not a common password.",
+  "auth.badUsername": "Username must be 3–20 letters, digits or underscores.",
+  "auth.offline": "Could not reach the server. Check your connection.",
+  "auth.failed": "Something went wrong. Try again.",
+  "splash.loading": "Loading MMAdle",
+  "splash.warming": "Warming up the octagon…",
+  "stats.titleA": "My",
+  "stats.titleB": "stats",
+  "stats.back": "← Back to the game",
+  "stats.poolGroup": "Pool",
+  "stats.poolAll": "All fighters",
+  "stats.poolMen": "Men only",
+  "stats.loading": "Loading…",
+  "stats.guest": "Sign in to keep your stats across devices — guests play without an account and leave no trace.",
+  "stats.loadError": "Could not load stats",
+  "stats.days": "Days played",
+  "stats.gamesSub": "{n} games",
+  "stats.accuracy": "Accuracy",
+  "stats.wonSub": "{won} of {played} won",
+  "stats.triesDay": "Tries / day",
+  "stats.streak": "Streak",
+  "stats.best": "best {n}",
+  "stats.distTitle": "Guesses needed to solve",
+  "stats.distSub": "Won games only · average {n} tries",
+  "stats.noWins": "No wins yet — solve one to start the chart.",
+  "stats.winsIn": "{c} wins in {n} tries",
+  "stats.recent": "Recent games",
+  "stats.nothing": "Nothing played yet.",
+  "stats.thDay": "Day",
+  "stats.thPool": "Pool",
+  "stats.thTries": "Tries",
+  "stats.thResult": "Result",
+  "stats.poolNameAll": "All",
+  "stats.poolNameMen": "Men",
+  "stats.solved": "✓ Solved",
+  "stats.missed": "✗ Missed",
+  "admin.titleA": "Met",
+  "admin.titleB": "rics",
+  "admin.window": "Window",
+  "admin.locked": "Admins only. {detail}",
+  "admin.lockedPlayer": "Your account is a player account.",
+  "admin.lockedGuest": "Sign in with an admin account.",
+  "admin.loading": "Loading metrics…",
+  "admin.loadError": "Could not load metrics",
+  "admin.game": "Game",
+  "admin.gameNote": "(signed-in players; guests stay in their browsers)",
+  "admin.games": "Games",
+  "admin.since": "since {date}",
+  "admin.winRate": "Win rate",
+  "admin.wonSub": "{n} won",
+  "admin.avgWin": "Avg guesses to win",
+  "admin.accounts": "Accounts",
+  "admin.signupsSub": "total signups",
+  "admin.guessesDay": "Guesses per day",
+  "admin.playersDay": "Active players per day",
+  "admin.noData": "No data in this window.",
+  "admin.byPool": "By pool",
+  "admin.thPool": "Pool",
+  "admin.thGames": "Games",
+  "admin.thWon": "Won",
+  "admin.thGuesses": "Guesses",
+  "admin.topFighters": "Most guessed fighters",
+  "admin.noGuesses": "No guesses yet.",
+  "admin.worker": "Worker",
+  "admin.edge": "(Cloudflare edge)",
+  "admin.script": "script {name}",
+  "admin.errKinds": "script threw / resources / internal",
+  "admin.errRate": "Error rate",
+  "admin.reqDay": "Requests per day (CPU p50 / p99 µs)",
+  "admin.thDay": "Day",
+  "admin.thReq": "Req",
+  "admin.thErr": "Err",
+  "admin.cfMissingTitle": "Cloudflare API not connected.",
+  "admin.cfMissingBody": "The dashboard already shows Worker requests, errors and CPU time. To embed them here, set the secrets:",
+  "admin.cfMissingNote": "The token needs the Analytics:Read permission; it never leaves the server (the browser only sees these aggregated numbers).",
+};
+
+export type StringKey = keyof typeof en;
+
+type Dict = Record<StringKey, string>;
+
+const ptBR: Dict = {
+  "lang.group": "Idioma",
+  "header.tagline": "Adivinhe o lutador escondido do UFC de hoje",
+  "header.taglineDate": "Adivinhe o lutador escondido do UFC de hoje, {date}",
+  "header.signIn": "Entrar",
+  "header.account": "Conta: {name}",
+  "header.signedIn": "Conectado — palpites sincronizados entre dispositivos.",
+  "header.myStats": "Minhas estatísticas",
+  "header.metrics": "Métricas",
+  "header.signOut": "Sair",
+  "header.howTo": "Como jogar",
+  "header.howIntro": "Escolha um lutador. Cada palpite mostra o quão perto você está.",
+  "header.legLanded": "Em cheio: este atributo confere.",
+  "header.legHigher": "O lutador escondido é mais velho ou mais alto.",
+  "header.legLower": "O lutador escondido é mais novo ou mais baixo.",
+  "header.legMiss": "Errou: sem correspondência.",
+  "header.howHints": "Empacou? Dicas desbloqueiam conforme você palpita.",
+  "header.howPools": "Escolha {pool} para um lutador diário separado das divisões masculinas.",
+  "pool.all": "Homens e mulheres",
+  "pool.men": "Só homens",
+  "pool.group": "Modo de jogo",
+  "board.loading": "Carregando o jogo de hoje…",
+  "board.loadError": "Não foi possível carregar o jogo",
+  "board.evaluating": "Avaliando palpite…",
+  "board.guessFailed": "Falha no palpite",
+  "board.syncFailed": "Falha ao sincronizar seus palpites",
+  "board.clipboard": "Área de transferência bloqueada — selecione o texto manualmente.",
+  "board.guesses": "Palpites:",
+  "board.solved": ", resolvido",
+  "board.dailyGame": "Jogo diário",
+  "board.footer": "As estatísticas dos lutadores são aproximadas. As fotos são de colaboradores do Wikimedia Commons; autor e licença de cada foto aparecem na dica e sob o retrato do vencedor.",
+  "search.label": "Buscar lutador",
+  "search.ph": "Buscar lutadores",
+  "search.solvedPh": "Resolvido por hoje",
+  "search.searching": "Buscando…",
+  "search.matches": "Lutadores encontrados",
+  "search.noMatch": "Nenhum lutador corresponde a “{q}”. Tente um nome ou sobrenome, ou veja todos os lutadores.",
+  "table.empty": "Sem palpites ainda. Busque um lutador acima para dar seu primeiro palpite.",
+  "table.history": "Histórico de palpites",
+  "table.guessN": "Palpite {n}",
+  "table.correct": "✓ Correto",
+  "table.attrAge": "Idade",
+  "table.attrDivision": "Divisão",
+  "table.attrHeight": "Altura",
+  "table.attrRecord": "Cartel",
+  "table.attrNation": "País",
+  "table.attrEvent": "Último evento",
+  "table.match": "confere",
+  "table.noMatch": "sem correspondência",
+  "table.older": "mais velho",
+  "table.younger": "mais novo",
+  "table.taller": "mais alto",
+  "table.shorter": "mais baixo",
+  "cmp.correct": "correto",
+  "cmp.higher": "o alvo é maior",
+  "cmp.lower": "o alvo é menor",
+  "cmp.incorrect": "incorreto",
+  "hints.unavailable": "Dicas indisponíveis no momento.",
+  "hints.title": "Dicas",
+  "hints.next": "Próxima dica em {n} {unit}",
+  "hints.guessOne": "palpite",
+  "hints.guessMany": "palpites",
+  "win.today": "Lutador de hoje",
+  "win.solvedIn": "Resolvido em {tries}",
+  "win.tryOne": "1 tentativa",
+  "win.tryMany": "{n} tentativas",
+  "win.tomorrow": "Esse é o lutador de hoje. Amanhã tem um novo.",
+  "win.share": "Compartilhar resultado",
+  "win.copied": "Copiado!",
+  "win.photoOf": "Foto: {credit}",
+  "roster.all": "Todos os lutadores",
+  "roster.list": "Todos os lutadores",
+  "roster.loading": "Carregando lutadores…",
+  "roster.loadError": "Não foi possível carregar os lutadores",
+  "roster.count": "{n} lutadores",
+  "option.guessed": " (usado)",
+  "photo.noPhoto": "{name} (sem foto)",
+  "solvers.one": "{n} jogador resolveu hoje",
+  "solvers.many": "{n} jogadores resolveram hoje",
+  "auth.signIn": "Entrar",
+  "auth.join": "Criar conta",
+  "auth.create": "Criar conta",
+  "auth.tabs": "Conta",
+  "auth.username": "Nome de usuário",
+  "auth.password": "Senha",
+  "auth.passwordPh": "Mínimo de 10 caracteres",
+  "auth.working": "Aguarde…",
+  "auth.later": "Depois",
+  "auth.note": "Contas mantêm seus palpites entre dispositivos. Jogar sem conta continua igual.",
+  "auth.unauthorized": "Nome de usuário ou senha incorretos.",
+  "auth.taken": "Esse nome de usuário já está em uso. Tente entrar.",
+  "auth.rateLimited": "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+  "auth.weakPassword": "A senha deve ter ao menos 10 caracteres e não ser comum.",
+  "auth.badUsername": "O nome de usuário deve ter de 3 a 20 letras, números ou underscores.",
+  "auth.offline": "Não foi possível alcançar o servidor. Verifique sua conexão.",
+  "auth.failed": "Algo deu errado. Tente de novo.",
+  "splash.loading": "Carregando MMAdle",
+  "splash.warming": "Aquecendo o octógono…",
+  "stats.titleA": "Minhas",
+  "stats.titleB": "estatísticas",
+  "stats.back": "← Voltar ao jogo",
+  "stats.poolGroup": "Grupo",
+  "stats.poolAll": "Todos os lutadores",
+  "stats.poolMen": "Só homens",
+  "stats.loading": "Carregando…",
+  "stats.guest": "Entre para manter suas estatísticas entre dispositivos — visitantes jogam sem conta e não deixam rastro.",
+  "stats.loadError": "Não foi possível carregar as estatísticas",
+  "stats.days": "Dias jogados",
+  "stats.gamesSub": "{n} jogos",
+  "stats.accuracy": "Precisão",
+  "stats.wonSub": "{won} de {played} vencidos",
+  "stats.triesDay": "Tentativas / dia",
+  "stats.streak": "Sequência",
+  "stats.best": "recorde {n}",
+  "stats.distTitle": "Tentativas até acertar",
+  "stats.distSub": "Só vitórias · média de {n} tentativas",
+  "stats.noWins": "Sem vitórias ainda — vença uma para começar o gráfico.",
+  "stats.winsIn": "{c} vitórias em {n} tentativas",
+  "stats.recent": "Jogos recentes",
+  "stats.nothing": "Nada jogado ainda.",
+  "stats.thDay": "Dia",
+  "stats.thPool": "Grupo",
+  "stats.thTries": "Tentativas",
+  "stats.thResult": "Resultado",
+  "stats.poolNameAll": "Todos",
+  "stats.poolNameMen": "Homens",
+  "stats.solved": "✓ Acertado",
+  "stats.missed": "✗ Errou",
+  "admin.titleA": "Mé",
+  "admin.titleB": "tricas",
+  "admin.window": "Período",
+  "admin.locked": "Só administradores. {detail}",
+  "admin.lockedPlayer": "Sua conta é de jogador.",
+  "admin.lockedGuest": "Entre com uma conta de administrador.",
+  "admin.loading": "Carregando métricas…",
+  "admin.loadError": "Não foi possível carregar as métricas",
+  "admin.game": "Jogo",
+  "admin.gameNote": "(jogadores conectados; visitantes ficam no navegador)",
+  "admin.games": "Jogos",
+  "admin.since": "desde {date}",
+  "admin.winRate": "Taxa de acerto",
+  "admin.wonSub": "{n} vencidos",
+  "admin.avgWin": "Média p/ vitória",
+  "admin.accounts": "Contas",
+  "admin.signupsSub": "cadastros totais",
+  "admin.guessesDay": "Palpites por dia",
+  "admin.playersDay": "Jogadores ativos por dia",
+  "admin.noData": "Sem dados no período.",
+  "admin.byPool": "Por grupo",
+  "admin.thPool": "Grupo",
+  "admin.thGames": "Jogos",
+  "admin.thWon": "Vencidos",
+  "admin.thGuesses": "Palpites",
+  "admin.topFighters": "Mais palpitados",
+  "admin.noGuesses": "Sem palpites ainda.",
+  "admin.worker": "Worker",
+  "admin.edge": "(edge Cloudflare)",
+  "admin.script": "script {name}",
+  "admin.errKinds": "exceção / recursos / interno",
+  "admin.errRate": "Taxa de erro",
+  "admin.reqDay": "Requisições por dia (CPU p50 / p99 µs)",
+  "admin.thDay": "Dia",
+  "admin.thReq": "Req",
+  "admin.thErr": "Erros",
+  "admin.cfMissingTitle": "API da Cloudflare não conectada.",
+  "admin.cfMissingBody": "O painel já mostra requisições, erros e CPU do Worker. Para embutir aqui, configure os secrets:",
+  "admin.cfMissingNote": "O token precisa da permissão Analytics:Read; ele nunca sai do servidor (o navegador vê só estes números agregados).",
+};
+
+const STRINGS: Record<Lang, Dict> = { en, "pt-BR": ptBR };
+
+/** Raw dictionaries, exported for the parity test (components use `t`). */
+export const DICTS: Record<Lang, Readonly<Dict>> = STRINGS;
+
+export type TVars = Record<string, string | number>;
+
+function interpolate(template: string, vars?: TVars): string {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (_, name: string) =>
+    vars[name] === undefined ? `{${name}}` : String(vars[name]),
+  );
+}
+
+function detectLang(): Lang {
+  if (typeof window === "undefined") return "en";
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === "en" || stored === "pt-BR") return stored;
+  } catch {
+    // Storage blocked: fall through to browser detection.
+  }
+  if (typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("pt")) {
+    return "pt-BR";
+  }
+  return "en";
+}
+
+type LangContextValue = {
+  lang: Lang;
+  setLang: (lang: Lang) => void;
+  t: (key: StringKey, vars?: TVars) => string;
+};
+
+const LangContext = createContext<LangContextValue>({
+  lang: "en",
+  setLang: () => {},
+  t: (key, vars) => interpolate(en[key], vars),
+});
+
+/** Provides the UI language to the tree. Mount once per page root. */
+export function LangProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(detectLang);
+
+  useEffect(() => {
+    setLangState(detectLang());
+  }, []);
+
+  const setLang = useCallback((next: Lang) => {
+    setLangState(next);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // Storage blocked: language still works in-memory.
+    }
+  }, []);
+
+  const t = useCallback(
+    (key: StringKey, vars?: TVars) => interpolate(STRINGS[lang][key] ?? en[key], vars),
+    [lang],
+  );
+
+  return <LangContext.Provider value={{ lang, setLang, t }}>{children}</LangContext.Provider>;
+}
+
+export function useLang(): LangContextValue {
+  return useContext(LangContext);
+}

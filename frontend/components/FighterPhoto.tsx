@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { initials } from "@/lib/fighter";
+import { useLang } from "@/lib/i18n";
 
 const SIZES = {
   sm: { px: 40, box: "h-10 w-10 border-2", text: "text-base" },
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function FighterPhoto({ name, url, credit, size, className = "" }: Props) {
+  const { t } = useLang();
   const s = SIZES[size];
   return (
     <div className={`relative shrink-0 overflow-hidden border-ink bg-bruise ${s.box} ${className}`}>
@@ -23,7 +25,7 @@ export function FighterPhoto({ name, url, credit, size, className = "" }: Props)
         <Image
           src={url}
           alt={name}
-          title={credit ? `Photo: ${credit}` : undefined}
+          title={credit ? t("win.photoOf", { credit }) : undefined}
           width={s.px}
           height={s.px}
           className="h-full w-full object-cover object-top grayscale-[35%] contrast-125"
@@ -31,7 +33,7 @@ export function FighterPhoto({ name, url, credit, size, className = "" }: Props)
       ) : (
         <span
           role="img"
-          aria-label={`${name} (no photo)`}
+          aria-label={t("photo.noPhoto", { name })}
           className={`flex h-full w-full items-center justify-center font-display text-bone ${s.text}`}
         >
           {initials(name)}

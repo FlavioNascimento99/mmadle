@@ -5,10 +5,20 @@ import { AuthDialog } from "@/components/AuthDialog";
 import { Header, Shell } from "@/components/Header";
 import { GameBoard } from "@/components/GameBoard";
 import { Splash } from "@/components/Splash";
+import { LangProvider, useLang } from "@/lib/i18n";
 import { fetchToday } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
 export default function Page() {
+  return (
+    <LangProvider>
+      <Home />
+    </LangProvider>
+  );
+}
+
+function Home() {
+  const { t } = useLang();
   const [gameDate, setGameDate] = useState("");
   const [booted, setBooted] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -41,11 +51,11 @@ export default function Page() {
         onSignOut={() => void logout()}
       />
       <main className="mx-auto max-w-5xl space-y-8 px-4 py-8">
-        <section aria-label="Daily game">
+        <section aria-label={t("board.dailyGame")}>
           <GameBoard user={user} />
         </section>
         <footer className="border-t-2 border-bone/20 pt-4 text-xs text-steel">
-          Fighter stats are approximate. Photos are by Wikimedia Commons contributors; each photo&apos;s author and licence show in its tooltip and under the winner&apos;s portrait.
+          {t("board.footer")}
         </footer>
       </main>
       <AuthDialog

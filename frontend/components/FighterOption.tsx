@@ -1,4 +1,5 @@
 import type { SearchResult } from "@/lib/api";
+import { useLang } from "@/lib/i18n";
 import { FighterPhoto } from "./FighterPhoto";
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export function FighterOption({ fighter, guessed, onPick }: Props) {
+  const { t } = useLang();
   return (
     <li className="border-b-2 border-ink last:border-b-0">
       <button
@@ -22,7 +24,7 @@ export function FighterOption({ fighter, guessed, onPick }: Props) {
         <span className="min-w-0">
           <span className="block truncate font-bold">
             {fighter.name}
-            {guessed ? " (guessed)" : ""}
+            {guessed ? t("option.guessed") : ""}
           </span>
           <span className="block truncate text-xs opacity-75">
             {[fighter.nickname && `“${fighter.nickname}”`, fighter.division, fighter.nationality]

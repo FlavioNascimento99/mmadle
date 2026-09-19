@@ -1,5 +1,5 @@
 import type { Pool } from "@/lib/api";
-import { POOL_OPTIONS } from "@/lib/pool";
+import { useLang } from "@/lib/i18n";
 
 type Props = {
   pool: Pool;
@@ -8,9 +8,14 @@ type Props = {
 };
 
 export function ModeToggle({ pool, disabled, onChange }: Props) {
+  const { t } = useLang();
+  const options: { value: Pool; label: string }[] = [
+    { value: "all", label: t("pool.all") },
+    { value: "men", label: t("pool.men") },
+  ];
   return (
-    <div role="group" aria-label="Game mode" className="inline-flex border-3 border-ink shadow-blood">
-      {POOL_OPTIONS.map((option) => {
+    <div role="group" aria-label={t("pool.group")} className="inline-flex border-3 border-ink shadow-blood">
+      {options.map((option) => {
         const active = option.value === pool;
         return (
           <button

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { searchFighters, type Pool, type SearchResult } from "@/lib/api";
 import { useClickOutside } from "@/lib/useClickOutside";
+import { useLang } from "@/lib/i18n";
 import { FighterOption } from "./FighterOption";
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function SearchBar({ pool, disabled, guessedIds, onSelect }: Props) {
+  const { t } = useLang();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -54,7 +56,7 @@ export function SearchBar({ pool, disabled, guessedIds, onSelect }: Props) {
   return (
     <div ref={boxRef} className="relative">
       <label htmlFor="fighter-search" className="sr-only">
-        Search fighter
+        {t("search.label")}
       </label>
       <input
         id="fighter-search"
@@ -64,18 +66,18 @@ export function SearchBar({ pool, disabled, guessedIds, onSelect }: Props) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
-        placeholder={disabled ? "Solved for today" : "Search fighters"}
+        placeholder={disabled ? t("search.solvedPh") : t("search.ph")}
         className="w-full border-3 border-ink bg-bone px-4 py-3.5 text-lg font-semibold text-ink shadow-blood placeholder:font-normal placeholder:text-ink/50 focus-visible:shadow-hard focus-visible:outline-blood disabled:opacity-50"
       />
       {loading && (
         <p className="mt-2 text-xs text-steel" role="status">
-          Searching…
+          {t("search.searching")}
         </p>
       )}
       {open && results.length > 0 && (
         <ul
           role="listbox"
-          aria-label="Matching fighters"
+          aria-label={t("search.matches")}
           className="absolute z-10 mt-2 max-h-80 w-full overflow-auto border-3 border-ink bg-bone shadow-blood-lg"
         >
           {results.map((f) => (
@@ -84,7 +86,7 @@ export function SearchBar({ pool, disabled, guessedIds, onSelect }: Props) {
         </ul>
       )}
       {open && query.trim().length >= 2 && !loading && results.length === 0 && (
-        <p className="mt-2 text-xs text-steel">No fighters match “{query}”. Try a first or last name, or browse all fighters.</p>
+        <p className="mt-2 text-xs text-steel">{t("search.noMatch", { q: query })}</p>
       )}
     </div>
   );
