@@ -47,6 +47,8 @@ type Server struct {
 	SessionSecure bool
 	// AdminMetrics backs /api/admin/metrics/* (nil in tests for other routes).
 	AdminMetrics store.AdminStore
+	// Stats backs /api/me/stats (nil in tests for other routes).
+	Stats store.StatsStore
 	// AdminUsernames is the normalized allowlist auto-promoting admins.
 	AdminUsernames map[string]bool
 	// CloudflareToken/Account enable /api/admin/cloudflare/* (Worker secrets).
@@ -83,12 +85,14 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	s.mux.HandleFunc("/api/fighters/search", s.handleSearch)
 	s.mux.HandleFunc("/api/game/guess", s.handleGuess)
 	s.mux.HandleFunc("/api/game/hints", s.handleHints)
+	s.mux.HandleFunc("/api/game/stats", s.handleDailyStats)
 	s.mux.HandleFunc("/api/auth/register", s.handleRegister)
 	s.mux.HandleFunc("/api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("/api/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/me/guesses", s.handleMyGuesses)
 	s.mux.HandleFunc("/api/me/import", s.handleImport)
+	s.mux.HandleFunc("/api/me/stats", s.handleMyStats)
 	s.mux.HandleFunc("/api/admin/metrics/overview", s.handleAdminOverview)
 	s.mux.HandleFunc("/api/admin/cloudflare/workers", s.handleCloudflareWorkers)
 	return s
@@ -300,6 +304,12 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 	// Signed-in guesses are recorded server-side (best-effort); guests are
 	// untouched and the response never waits on the write failing.
 	s.recordGuessBestEffort(r, pool, gameDate, outcome)
+	// Every solve counts towards the public counter, logged in or not
+	// (guests via their anon identity); must run before writeJSON so a
+	// newly issued anon cookie lands on the response.
+	if outcome.Correct {
+		s.recordSolveBestEffort(w, r, pool, gameDate)
+	}
 	writeJSON(w, http.StatusOK, outcome)
 }
 

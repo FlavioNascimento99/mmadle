@@ -128,6 +128,21 @@ export async function fetchHints(guesses: number, pool: Pool): Promise<Hints> {
   return parseOrThrow(res, HintsSchema, "Loading hints");
 }
 
+/** How many signed-in players solved today's daily game in one pool. */
+export const DailyStatsSchema = z.object({
+  date: z.string(),
+  pool: z.string(),
+  solvers: z.number(),
+});
+export type DailyStats = z.infer<typeof DailyStatsSchema>;
+
+export async function fetchDailyStats(pool: Pool): Promise<DailyStats> {
+  const res = await fetch(`${apiBase()}/api/game/stats?pool=${pool}`, {
+    cache: "no-store",
+  });
+  return parseOrThrow(res, DailyStatsSchema, "Loading daily stats");
+}
+
 /** Signed-in account. Password hashes never leave the backend. */
 export const AuthUserSchema = z.object({
   id: z.number(),
@@ -266,4 +281,44 @@ export async function fetchCFWorkers(days: number): Promise<CFWorkers | null> {
   });
   if (res.status === 501) return null;
   return parseOrThrow(res, CFWorkersSchema, "Loading Cloudflare metrics");
+}
+
+const PoolStatsSchema = z.object({
+  games_played: z.number(),
+  games_won: z.number(),
+  win_rate: z.number(),
+  current_streak: z.number(),
+  max_streak: z.number(),
+  avg_tries: z.number(),
+  avg_tries_to_win: z.number(),
+  distribution: z.record(z.string(), z.number()),
+  days_played: z.number(),
+});
+export type PoolStats = z.infer<typeof PoolStatsSchema>;
+
+/** Personal statistics for the signed-in player. */
+export const UserStatsSchema = z.object({
+  pools: z.record(z.string(), PoolStatsSchema),
+  games_total: z.number(),
+  games_won: z.number(),
+  win_rate: z.number(),
+  days_played: z.number(),
+  avg_tries_per_day: z.number(),
+  recent_games: z.array(
+    z.object({
+      date: z.string(),
+      pool: PoolSchema,
+      guesses: z.number(),
+      won: z.boolean(),
+    }),
+  ),
+});
+export type UserStats = z.infer<typeof UserStatsSchema>;
+
+export async function fetchMyStats(): Promise<UserStats> {
+  const res = await fetch(`${apiBase()}/api/me/stats`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return parseOrThrow(res, UserStatsSchema, "Loading your stats");
 }
