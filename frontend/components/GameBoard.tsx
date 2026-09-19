@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMyGuesses,
   fetchToday,
@@ -23,8 +23,8 @@ import { WinReveal } from "./WinReveal";
 
 /**
  * Daily game board. Guests play exactly as before (localStorage only).
- * Signed-in players get their server history restored on any device, plus a
- * one-tap import when this device holds local guesses the account lacks.
+ * Signed-in players get their server history restored on any device, and
+ * device-only guesses sync into the account automatically, silently.
  */
 export function GameBoard({ user }: { user: AuthUser | null }) {
   const [gameDate, setGameDate] = useState("");
@@ -36,7 +36,9 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
   const [copied, setCopied] = useState(false);
   const [serverGuesses, setServerGuesses] = useState<GuessOutcome[] | null>(null);
   const [importing, setImporting] = useState(false);
-  const [importDismissed, setImportDismissed] = useState(false);
+  // Account+pool+date keys already synced (or syncing), so sign-in, pool
+  // switches and repeated renders never double-submit the same import.
+  const importTried = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -51,11 +53,10 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
   }, []);
 
   // Signed-in: load the server history for this game. When this device has
-  // nothing saved, restore it directly; otherwise offer an import below.
+  // nothing saved, restore it directly; device-only guesses auto-sync below.
   useEffect(() => {
     if (!user || !gameDate) {
       setServerGuesses(null);
-      setImportDismissed(false);
       return;
     }
     let cancelled = false;
@@ -93,32 +94,36 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
     () => guesses.map((g) => g.fighter_id).filter((id) => !serverIds.has(id)),
     [guesses, serverIds],
   );
-  const showImportBanner =
-    user !== null &&
-    serverGuesses !== null &&
-    localOnlyIds.length > 0 &&
-    !importDismissed &&
-    !importing;
-
-  const onImport = useCallback(async () => {
-    if (!user || !gameDate || localOnlyIds.length === 0) return;
-    setImporting(true);
-    setError(null);
-    try {
-      const result = await importGuesses(pool, gameDate, localOnlyIds);
-      const merged = [...guesses];
-      const known = new Set(merged.map((g) => g.fighter_id));
-      for (const outcome of result.guesses) {
-        if (!known.has(outcome.fighter_id)) merged.push(outcome);
-      }
-      setGuesses(merged);
-      setServerGuesses(merged);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Import failed");
-    } finally {
-      setImporting(false);
+  // Device guesses the account lacks sync automatically, silently.
+  // Failures surface in the error line and retry on the next board change
+  // (the key is released), so a blip never strands guesses or the error.
+  useEffect(() => {
+    if (!user || !gameDate || serverGuesses === null || localOnlyIds.length === 0 || importing) {
+      return;
     }
-  }, [user, gameDate, localOnlyIds, pool, guesses, setGuesses]);
+    const key = `${user.id}|${pool}|${gameDate}`;
+    if (importTried.current.has(key)) return;
+    importTried.current.add(key);
+    (async () => {
+      setImporting(true);
+      try {
+        const result = await importGuesses(pool, gameDate, localOnlyIds);
+        const merged = [...guesses];
+        const known = new Set(merged.map((g) => g.fighter_id));
+        for (const outcome of result.guesses) {
+          if (!known.has(outcome.fighter_id)) merged.push(outcome);
+        }
+        setGuesses(merged);
+        setServerGuesses(merged);
+        setError(null);
+      } catch (e) {
+        importTried.current.delete(key);
+        setError(e instanceof Error ? e.message : "Syncing your guesses failed");
+      } finally {
+        setImporting(false);
+      }
+    })();
+  }, [user, gameDate, pool, serverGuesses, localOnlyIds, guesses, importing, setGuesses]);
 
   const onSelect = useCallback(
     async (fighter: SearchResult) => {
@@ -156,30 +161,6 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
     <div className="space-y-6">
       <ModeToggle pool={pool} disabled={submitting} onChange={setPool} />
       <DailySolvers pool={pool} refreshKey={guesses.length} />
-
-      {showImportBanner && (
-        <div className="border-3 border-bone bg-bruise px-3 py-2 text-sm text-bone" role="status">
-          <p className="font-semibold">
-            You have {localOnlyIds.length} {localOnlyIds.length === 1 ? "guess" : "guesses"} on this
-            device that {user ? `@${user.username}` : "your account"} doesn&apos;t.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={onImport}
-              disabled={importing}
-              className="press border-3 border-bone bg-blood px-3 py-1 font-semibold text-bone disabled:opacity-60"
-            >
-              {importing ? "Importing…" : "Import to my account"}
-            </button>
-            <button
-              onClick={() => setImportDismissed(true)}
-              className="press border-3 border-bone bg-ink px-3 py-1 font-semibold text-steel"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
