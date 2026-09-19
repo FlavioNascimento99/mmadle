@@ -9,6 +9,7 @@ import {
   type CFWorkers,
   type MetricsOverview,
 } from "@/lib/api";
+import { LangProvider, useLang } from "@/lib/i18n";
 import { useAuth } from "@/lib/useAuth";
 
 function Card({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -22,7 +23,8 @@ function Card({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 function Bars({ rows, max }: { rows: { date: string; count: number }[]; max: number }) {
-  if (rows.length === 0) return <p className="text-sm text-steel">No data in this window.</p>;
+  const { t } = useLang();
+  if (rows.length === 0) return <p className="text-sm text-steel">{t("admin.noData")}</p>;
   return (
     <ul className="space-y-1.5">
       {rows.map((r) => (
@@ -46,6 +48,15 @@ function Bars({ rows, max }: { rows: { date: string; count: number }[]; max: num
  * from the API, so this page doubles as a friendly locked door).
  */
 export default function AdminPage() {
+  return (
+    <LangProvider>
+      <AdminView />
+    </LangProvider>
+  );
+}
+
+function AdminView() {
+  const { t } = useLang();
   const { user, authLoading, logout } = useAuth();
   const [days, setDays] = useState(30);
   const [overview, setOverview] = useState<MetricsOverview | null>(null);
@@ -60,12 +71,12 @@ export default function AdminPage() {
       const [ov, workers] = await Promise.all([fetchOverview(days), fetchCFWorkers(days)]);
       setOverview(ov);
       setCf(workers ?? "missing");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load metrics");
+    } catch {
+      setError(t("admin.loadError"));
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, t]);
 
   useEffect(() => {
     if (!authLoading && user?.role === "admin") void load();
@@ -85,13 +96,13 @@ export default function AdminPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="font-display text-5xl uppercase text-bone">
-              Met<span className="text-blood">rics</span>
+              {t("admin.titleA")}<span className="text-blood">{t("admin.titleB")}</span>
             </h2>
             <p className="mt-1 text-sm text-steel">
-              <Link href="/" className="underline">← Back to the game</Link>
+              <Link href="/" className="underline">{t("stats.back")}</Link>
             </p>
           </div>
-          <div className="flex border-3 border-bone" role="group" aria-label="Window">
+          <div className="flex border-3 border-bone" role="group" aria-label={t("admin.window")}>
             {[7, 30, 90].map((d) => (
               <button
                 key={d}
@@ -106,10 +117,10 @@ export default function AdminPage() {
         </div>
 
         {authLoading || (loading && isAdmin) ? (
-          <p className="text-sm text-steel">Loading metrics…</p>
+          <p className="text-sm text-steel">{t("admin.loading")}</p>
         ) : !isAdmin ? (
           <p className="border-3 border-blood bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
-            Admins only. {user ? "Your account is a player account." : "Sign in with an admin account."}
+            {t("admin.locked", { detail: user ? t("admin.lockedPlayer") : t("admin.lockedGuest") })}
           </p>
         ) : error ? (
           <p className="border-3 border-blood bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
@@ -118,37 +129,37 @@ export default function AdminPage() {
         ) : (
           overview && (
             <>
-              <section aria-label="Game">
-                <h3 className="mb-3 font-display text-2xl uppercase text-bone">Game <span className="text-sm text-steel">(signed-in players; guests stay in their browsers)</span></h3>
+              <section aria-label={t("admin.game")}>
+                <h3 className="mb-3 font-display text-2xl uppercase text-bone">{t("admin.game")} <span className="text-sm text-steel">{t("admin.gameNote")}</span></h3>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  <Card label="Games" value={String(overview.games_total)} sub={`since ${overview.since}`} />
-                  <Card label="Win rate" value={`${Math.round(overview.win_rate * 100)}%`} sub={`${overview.games_won} won`} />
-                  <Card label="Avg guesses to win" value={overview.avg_guesses_to_win.toFixed(1)} />
-                  <Card label="Accounts" value={String(overview.signups_total)} sub="total signups" />
+                  <Card label={t("admin.games")} value={String(overview.games_total)} sub={t("admin.since", { date: overview.since })} />
+                  <Card label={t("admin.winRate")} value={`${Math.round(overview.win_rate * 100)}%`} sub={t("admin.wonSub", { n: overview.games_won })} />
+                  <Card label={t("admin.avgWin")} value={overview.avg_guesses_to_win.toFixed(1)} />
+                  <Card label={t("admin.accounts")} value={String(overview.signups_total)} sub={t("admin.signupsSub")} />
                 </div>
               </section>
 
-              <section aria-label="Daily activity" className="grid gap-6 md:grid-cols-2">
+              <section aria-label={t("admin.guessesDay")} className="grid gap-6 md:grid-cols-2">
                 <div className="border-3 border-bone bg-ink p-4">
-                  <h4 className="mb-3 font-bold text-bone">Guesses per day</h4>
+                  <h4 className="mb-3 font-bold text-bone">{t("admin.guessesDay")}</h4>
                   <Bars rows={overview.guesses_by_day} max={Math.max(...overview.guesses_by_day.map((r) => r.count), 0)} />
                 </div>
                 <div className="border-3 border-bone bg-ink p-4">
-                  <h4 className="mb-3 font-bold text-bone">Active players per day</h4>
+                  <h4 className="mb-3 font-bold text-bone">{t("admin.playersDay")}</h4>
                   <Bars rows={overview.players_by_day} max={Math.max(...overview.players_by_day.map((r) => r.count), 0)} />
                 </div>
               </section>
 
-              <section aria-label="Pools and fighters" className="grid gap-6 md:grid-cols-2">
+              <section aria-label={t("admin.byPool")} className="grid gap-6 md:grid-cols-2">
                 <div className="border-3 border-bone bg-ink p-4">
-                  <h4 className="mb-3 font-bold text-bone">By pool</h4>
+                  <h4 className="mb-3 font-bold text-bone">{t("admin.byPool")}</h4>
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="text-steel">
-                        <th className="py-1">Pool</th>
-                        <th className="py-1 text-right">Games</th>
-                        <th className="py-1 text-right">Won</th>
-                        <th className="py-1 text-right">Guesses</th>
+                        <th className="py-1">{t("admin.thPool")}</th>
+                        <th className="py-1 text-right">{t("admin.thGames")}</th>
+                        <th className="py-1 text-right">{t("admin.thWon")}</th>
+                        <th className="py-1 text-right">{t("admin.thGuesses")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -164,9 +175,9 @@ export default function AdminPage() {
                   </table>
                 </div>
                 <div className="border-3 border-bone bg-ink p-4">
-                  <h4 className="mb-3 font-bold text-bone">Most guessed fighters</h4>
+                  <h4 className="mb-3 font-bold text-bone">{t("admin.topFighters")}</h4>
                   {overview.top_fighters.length === 0 ? (
-                    <p className="text-sm text-steel">No guesses yet.</p>
+                    <p className="text-sm text-steel">{t("admin.noGuesses")}</p>
                   ) : (
                     <ol className="space-y-1 text-sm">
                       {overview.top_fighters.map((f, i) => (
@@ -180,32 +191,32 @@ export default function AdminPage() {
                 </div>
               </section>
 
-              <section aria-label="Infrastructure">
-                <h3 className="mb-3 font-display text-2xl uppercase text-bone">Worker <span className="text-sm text-steel">(Cloudflare edge)</span></h3>
+              <section aria-label={t("admin.worker")}>
+                <h3 className="mb-3 font-display text-2xl uppercase text-bone">{t("admin.worker")} <span className="text-sm text-steel">{t("admin.edge")}</span></h3>
                 {cf === null ? (
-                  <p className="text-sm text-steel">Loading…</p>
+                  <p className="text-sm text-steel">{t("stats.loading")}</p>
                 ) : cf === "missing" ? (
                   <div className="border-3 border-bone bg-ink p-4 text-sm text-bone">
-                    <p className="font-bold">Cloudflare API not connected.</p>
-                    <p className="mt-1 text-steel">The dashboard already shows Worker requests, errors and CPU time. To embed them here, set the secrets:</p>
+                    <p className="font-bold">{t("admin.cfMissingTitle")}</p>
+                    <p className="mt-1 text-steel">{t("admin.cfMissingBody")}</p>
                     <pre className="mt-2 overflow-x-auto border-3 border-bone bg-ink p-3 font-mono text-xs text-steel">npx wrangler secret put CLOUDFLARE_API_TOKEN{"\n"}npx wrangler secret put CLOUDFLARE_ACCOUNT_ID</pre>
-                    <p className="mt-2 text-steel">The token needs the Analytics:Read permission; it never leaves the server (the browser only sees these aggregated numbers).</p>
+                    <p className="mt-2 text-steel">{t("admin.cfMissingNote")}</p>
                   </div>
                 ) : (
                   <>
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                      <Card label="Requests" value={String(cf.requests)} sub={`script ${cf.script}`} />
-                      <Card label="Errors" value={String(cf.errors)} sub="script threw / resources / internal" />
-                      <Card label="Error rate" value={cf.requests > 0 ? `${((cf.errors / cf.requests) * 100).toFixed(2)}%` : "—"} />
+                      <Card label="Requests" value={String(cf.requests)} sub={t("admin.script", { name: cf.script })} />
+                      <Card label="Errors" value={String(cf.errors)} sub={t("admin.errKinds")} />
+                      <Card label={t("admin.errRate")} value={cf.requests > 0 ? `${((cf.errors / cf.requests) * 100).toFixed(2)}%` : "—"} />
                     </div>
                     <div className="mt-4 border-3 border-bone bg-ink p-4">
-                      <h4 className="mb-3 font-bold text-bone">Requests per day (CPU p50 / p99 µs)</h4>
+                      <h4 className="mb-3 font-bold text-bone">{t("admin.reqDay")}</h4>
                       <table className="w-full text-left font-mono text-xs">
                         <thead>
                           <tr className="text-steel">
-                            <th className="py-1">Day</th>
-                            <th className="py-1 text-right">Req</th>
-                            <th className="py-1 text-right">Err</th>
+                            <th className="py-1">{t("admin.thDay")}</th>
+                            <th className="py-1 text-right">{t("admin.thReq")}</th>
+                            <th className="py-1 text-right">{t("admin.thErr")}</th>
                             <th className="py-1 text-right">CPU p50</th>
                             <th className="py-1 text-right">CPU p99</th>
                           </tr>

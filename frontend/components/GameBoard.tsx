@@ -13,6 +13,7 @@ import {
 import { shareText } from "@/lib/game";
 import { usePool } from "@/lib/usePool";
 import { useSavedGuesses } from "@/lib/useSavedGuesses";
+import { useLang } from "@/lib/i18n";
 import { SearchBar } from "./SearchBar";
 import { DailySolvers } from "./DailySolvers";
 import { GuessTable } from "./GuessTable";
@@ -27,6 +28,7 @@ import { WinReveal } from "./WinReveal";
  * device-only guesses sync into the account automatically, silently.
  */
 export function GameBoard({ user }: { user: AuthUser | null }) {
+  const { t } = useLang();
   const [gameDate, setGameDate] = useState("");
   const [pool, setPool] = usePool();
   const { guesses, addGuess, setGuesses } = useSavedGuesses(gameDate, pool);
@@ -44,13 +46,13 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
     (async () => {
       try {
         setGameDate((await fetchToday()).date);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not load game");
+      } catch {
+        setError(t("board.loadError"));
       } finally {
         setReady(true);
       }
     })();
-  }, []);
+  }, [t]);
 
   // Signed-in: load the server history for this game. When this device has
   // nothing saved, restore it directly; device-only guesses auto-sync below.
@@ -116,14 +118,14 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
         setGuesses(merged);
         setServerGuesses(merged);
         setError(null);
-      } catch (e) {
+      } catch {
         importTried.current.delete(key);
-        setError(e instanceof Error ? e.message : "Syncing your guesses failed");
+        setError(t("board.syncFailed"));
       } finally {
         setImporting(false);
       }
     })();
-  }, [user, gameDate, pool, serverGuesses, localOnlyIds, guesses, importing, setGuesses]);
+  }, [user, gameDate, pool, serverGuesses, localOnlyIds, guesses, importing, setGuesses, t]);
 
   const onSelect = useCallback(
     async (fighter: SearchResult) => {
@@ -134,13 +136,13 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
         // The cookie (when signed in) makes the backend record the guess;
         // the local copy keeps working for guests and offline.
         addGuess(await submitGuess(fighter.id, pool));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Guess failed");
+      } catch {
+        setError(t("board.guessFailed"));
       } finally {
         setSubmitting(false);
       }
     },
-    [won, submitting, guessedIds, addGuess, pool],
+    [won, submitting, guessedIds, addGuess, pool, t],
   );
 
   const share = useCallback(async () => {
@@ -149,12 +151,12 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("Clipboard blocked — select the text manually.");
+      setError(t("board.clipboard"));
     }
-  }, [guesses, gameDate, pool]);
+  }, [guesses, gameDate, pool, t]);
 
   if (!ready) {
-    return <p className="text-sm text-steel">Loading today&apos;s game…</p>;
+    return <p className="text-sm text-steel">{t("board.loading")}</p>;
   }
 
   return (
@@ -171,7 +173,7 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
 
       {submitting && (
         <p className="text-sm text-steel" role="status">
-          Evaluating guess…
+          {t("board.evaluating")}
         </p>
       )}
       {error && (
@@ -182,8 +184,8 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
 
       {guesses.length > 0 && (
         <p className="text-sm text-steel" aria-live="polite">
-          Guesses: <span className="font-display text-xl text-bone">{guesses.length}</span>
-          {won ? ", solved" : ""}
+          {t("board.guesses")} <span className="font-display text-xl text-bone">{guesses.length}</span>
+          {won ? t("board.solved") : ""}
         </p>
       )}
 

@@ -1,39 +1,41 @@
 import { z } from "zod";
 import { GuessOutcomeSchema, type Comparison, type GuessOutcome, type Pool } from "./api";
+import { DICTS, type Lang } from "./i18n";
 
 /**
  * Accessible metadata for each comparison state. UI must never rely on
  * color alone: every state has a symbol AND a text label.
  */
-export function comparisonMeta(comparison: Comparison): {
+export function comparisonMeta(comparison: Comparison, lang: Lang = "en"): {
   symbol: string;
   label: string;
   classes: string;
 } {
+  const d = DICTS[lang];
   switch (comparison) {
     case "correct":
       return {
         symbol: "✓",
-        label: "correct",
+        label: d["cmp.correct"],
         classes: "bg-blood text-bone",
       };
     case "higher":
       return {
         symbol: "↑",
-        label: "target is higher",
+        label: d["cmp.higher"],
         classes: "bg-bone text-ink",
       };
     case "lower":
       return {
         symbol: "↓",
-        label: "target is lower",
+        label: d["cmp.lower"],
         classes: "bg-bone text-ink",
       };
     case "incorrect":
     default:
       return {
         symbol: "✗",
-        label: "incorrect",
+        label: d["cmp.incorrect"],
         classes: "bg-ink text-steel",
       };
   }
