@@ -162,7 +162,7 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
   return (
     <div className="space-y-6">
       <ModeToggle pool={pool} disabled={submitting} onChange={setPool} />
-      <DailySolvers pool={pool} refreshKey={guesses.length} />
+      <DailySolvers pool={pool} refreshKey={guesses.length} guessCount={guesses.length} won={won} />
 
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
@@ -179,13 +179,6 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
       {error && (
         <p className="border-3 border-blood bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
           {error}
-        </p>
-      )}
-
-      {guesses.length > 0 && (
-        <p className="text-sm text-steel" aria-live="polite">
-          {t("board.guesses")} <span className="font-display text-xl text-bone">{guesses.length}</span>
-          {won ? t("board.solved") : ""}
         </p>
       )}
 
