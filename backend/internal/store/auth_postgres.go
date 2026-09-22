@@ -18,9 +18,9 @@ func (p *Postgres) CreateUser(ctx context.Context, username, passwordHash string
 	err := p.pool.QueryRow(ctx, `
 INSERT INTO users (username, password_hash)
 VALUES ($1, $2)
-RETURNING id, username, password_hash, role, is_active, created_at, last_login_at`,
+RETURNING id, username, password_hash, role, is_active, leaderboard_opt_in, created_at, last_login_at`,
 		username, passwordHash).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.LeaderboardOptIn, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -37,9 +37,9 @@ RETURNING id, username, password_hash, role, is_active, created_at, last_login_a
 func (p *Postgres) FindUserByUsername(ctx context.Context, username string) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT id, username, password_hash, role, is_active, created_at, last_login_at
+SELECT id, username, password_hash, role, is_active, leaderboard_opt_in, created_at, last_login_at
 FROM users WHERE username = $1`, username).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.LeaderboardOptIn, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -54,9 +54,9 @@ FROM users WHERE username = $1`, username).Scan(
 func (p *Postgres) FindUserByID(ctx context.Context, id int64) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT id, username, password_hash, role, is_active, created_at, last_login_at
+SELECT id, username, password_hash, role, is_active, leaderboard_opt_in, created_at, last_login_at
 FROM users WHERE id = $1`, id).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.LeaderboardOptIn, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -82,10 +82,10 @@ INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)`,
 func (p *Postgres) FindSessionUser(ctx context.Context, tokenHash string, now time.Time) (User, error) {
 	var u User
 	err := p.pool.QueryRow(ctx, `
-SELECT u.id, u.username, u.password_hash, u.role, u.is_active, u.created_at, u.last_login_at
+SELECT u.id, u.username, u.password_hash, u.role, u.is_active, u.leaderboard_opt_in, u.created_at, u.last_login_at
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1 AND s.expires_at > $2`, tokenHash, now).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLoginAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.IsActive, &u.LeaderboardOptIn, &u.CreatedAt, &u.LastLoginAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchAdminUsers, fetchDailyStats, fetchHints, listFighters, searchFighters, setUserActive, submitGuess } from "./api";
+import {
+  fetchAdminUsers,
+  fetchDailyStats,
+  fetchHints,
+  fetchLeaderboard,
+  listFighters,
+  searchFighters,
+  setLeaderboardOptIn,
+  setUserActive,
+  submitGuess,
+} from "./api";
 
 const stubFetch = (status: number, body: unknown) =>
   vi.stubGlobal(
@@ -119,5 +129,56 @@ describe("admin users", () => {
   it("surfaces toggle failures", async () => {
     stubFetch(404, { error: "user_not_found" });
     await expect(setUserActive(999, true)).rejects.toThrow(/404/);
+  });
+});
+
+describe("leaderboard", () => {
+  const entry = {
+    rank: 1,
+    username: "octagon_fan",
+    score: 21,
+    games: 2,
+    wins: 2,
+    win_rate: 1,
+    current_streak: 2,
+    max_streak: 2,
+    avg_tries: 3.5,
+  };
+
+  it("fetches the public ranking for a pool with credentials", async () => {
+    const page = { pool: "all", total: 1, rankings: [entry], my: null };
+    stubFetch(200, page);
+    await expect(fetchLeaderboard("all", 50, 0)).resolves.toEqual(page);
+    expect(fetch).toHaveBeenCalledWith("/api/leaderboard?pool=all&limit=50&offset=0", expect.objectContaining({
+      credentials: "include",
+    }));
+  });
+
+  it("keeps the signed-in player's own entry and opt-in state", async () => {
+    const page = { pool: "men", total: 1, rankings: [entry], my: { opt_in: true, entry } };
+    stubFetch(200, page);
+    const got = await fetchLeaderboard("men");
+    expect(got.my?.opt_in).toBe(true);
+    expect(got.my?.entry?.rank).toBe(1);
+  });
+
+  it("throws on malformed ranking rows", async () => {
+    stubFetch(200, { pool: "all", total: 1, rankings: [{ rank: "one" }], my: null });
+    await expect(fetchLeaderboard("all")).rejects.toThrow(/unexpected API response shape/);
+  });
+
+  it("posts the opt-in toggle", async () => {
+    stubFetch(200, { user_id: 2, leaderboard_opt_in: true });
+    await expect(setLeaderboardOptIn(true)).resolves.toEqual({ user_id: 2, leaderboard_opt_in: true });
+    expect(fetch).toHaveBeenCalledWith("/api/me/leaderboard", expect.objectContaining({
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({ opt_in: true }),
+    }));
+  });
+
+  it("surfaces opt-in failures", async () => {
+    stubFetch(500, { error: "leaderboard_failed" });
+    await expect(setLeaderboardOptIn(false)).rejects.toThrow(/500/);
   });
 });

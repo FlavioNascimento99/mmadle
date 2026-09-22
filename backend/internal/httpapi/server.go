@@ -51,6 +51,9 @@ type Server struct {
 	Stats store.StatsStore
 	// Infinite backs /api/infinite/* (nil in tests for other routes).
 	Infinite store.InfiniteStore
+	// Leaderboard backs /api/leaderboard and /api/me/leaderboard
+	// (nil in tests for other routes).
+	Leaderboard store.LeaderboardStore
 	// AdminUsernames is the normalized allowlist auto-promoting admins.
 	AdminUsernames map[string]bool
 	// CloudflareToken/Account enable /api/admin/cloudflare/* (Worker secrets).
@@ -104,6 +107,8 @@ func New(st store.FighterStore, auth store.AuthStore, sel domain.Selector, clk C
 	s.mux.HandleFunc("/api/admin/users", s.handleAdminUsers)
 	s.mux.HandleFunc("/api/admin/users/active", s.handleAdminSetActive)
 	s.mux.HandleFunc("/api/admin/cloudflare/workers", s.handleCloudflareWorkers)
+	s.mux.HandleFunc("/api/leaderboard", s.handleLeaderboard)
+	s.mux.HandleFunc("/api/me/leaderboard", s.handleLeaderboardOptIn)
 	return s
 }
 

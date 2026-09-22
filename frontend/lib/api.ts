@@ -149,6 +149,8 @@ export const AuthUserSchema = z.object({
   username: z.string(),
   role: z.enum(["player", "admin"]),
   created_at: z.string(),
+  // Whether the account appears on the public leaderboard.
+  leaderboard_opt_in: z.boolean(),
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 
@@ -420,4 +422,64 @@ export async function setUserActive(userId: number, active: boolean): Promise<Se
   const res = await fetch(`${apiBase()}/api/admin/users/active`, authInit("POST", { user_id: userId, active }));
   if (!res.ok) throw await authError(res, "Updating account");
   return parseOrThrow(res, SetActiveResultSchema, "Updating account");
+}
+
+/** One ranked player on the public leaderboard. */
+export const LeaderboardEntrySchema = z.object({
+  rank: z.number(),
+  username: z.string(),
+  score: z.number(),
+  games: z.number(),
+  wins: z.number(),
+  win_rate: z.number(),
+  current_streak: z.number(),
+  max_streak: z.number(),
+  avg_tries: z.number(),
+});
+export type LeaderboardEntry = z.infer<typeof LeaderboardEntrySchema>;
+
+/** The signed-in player's own state; entry is null until they opt in and rank. */
+export const LeaderboardMySchema = z.object({
+  opt_in: z.boolean(),
+  entry: LeaderboardEntrySchema.nullable(),
+});
+export type LeaderboardMy = z.infer<typeof LeaderboardMySchema>;
+
+export const LeaderboardSchema = z.object({
+  pool: PoolSchema,
+  total: z.number(),
+  rankings: z.array(LeaderboardEntrySchema),
+  // Guests and opted-out-after-login visitors still receive my: the UI uses
+  // opt_in to render the toggle and entry to highlight the own row.
+  my: LeaderboardMySchema.nullable(),
+});
+export type Leaderboard = z.infer<typeof LeaderboardSchema>;
+
+/** Public ranking for one pool. my comes along for signed-in visitors. */
+export async function fetchLeaderboard(
+  pool: Pool,
+  limit = 50,
+  offset = 0,
+): Promise<Leaderboard> {
+  const res = await fetch(
+    `${apiBase()}/api/leaderboard?pool=${pool}&limit=${limit}&offset=${offset}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  return parseOrThrow(res, LeaderboardSchema, "Loading leaderboard");
+}
+
+export const SetLeaderboardOptInSchema = z.object({
+  user_id: z.number(),
+  leaderboard_opt_in: z.boolean(),
+});
+export type SetLeaderboardOptInResult = z.infer<typeof SetLeaderboardOptInSchema>;
+
+/** Toggles the public appearance of the account (auth required). */
+export async function setLeaderboardOptIn(optIn: boolean): Promise<SetLeaderboardOptInResult> {
+  const res = await fetch(
+    `${apiBase()}/api/me/leaderboard`,
+    authInit("POST", { opt_in: optIn }),
+  );
+  if (!res.ok) throw await authError(res, "Updating leaderboard visibility");
+  return parseOrThrow(res, SetLeaderboardOptInSchema, "Updating leaderboard visibility");
 }

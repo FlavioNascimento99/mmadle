@@ -68,6 +68,12 @@ export function Header({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/leaderboard"
+            className="press whitespace-nowrap border-2 border-bone/25 bg-transparent px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-widest text-bone"
+          >
+            {t("header.leaderboard")}
+          </Link>
           {user ? (
             <details className="relative">
               <summary

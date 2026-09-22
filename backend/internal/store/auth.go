@@ -30,8 +30,11 @@ type User struct {
 	PasswordHash string
 	Role         string
 	IsActive     bool
-	CreatedAt    time.Time
-	LastLoginAt  *time.Time
+	// LeaderboardOptIn is whether the username, score and streak may appear
+	// on the public leaderboard (defaults to off).
+	LeaderboardOptIn bool
+	CreatedAt        time.Time
+	LastLoginAt      *time.Time
 }
 
 // GameGuess is one persisted daily guess. Outcomes are never stored: they are

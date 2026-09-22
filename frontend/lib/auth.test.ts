@@ -29,6 +29,7 @@ const account = {
   username: "octagon_fan",
   role: "player",
   created_at: "2026-09-18T00:00:00Z",
+  leaderboard_opt_in: false,
 };
 
 describe("auth", () => {

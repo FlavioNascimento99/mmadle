@@ -47,10 +47,17 @@ type userResponse struct {
 	Username  string `json:"username"`
 	Role      string `json:"role"`
 	CreatedAt string `json:"created_at"`
+	// LeaderboardOptIn mirrors users.leaderboard_opt_in so the UI can show
+	// the toggle without a separate round trip after auth.
+	LeaderboardOptIn bool `json:"leaderboard_opt_in"`
 }
 
 func toUserResponse(u store.User) userResponse {
-	return userResponse{ID: u.ID, Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339)}
+	return userResponse{
+		ID: u.ID, Username: u.Username, Role: u.Role,
+		CreatedAt:        u.CreatedAt.UTC().Format(time.RFC3339),
+		LeaderboardOptIn: u.LeaderboardOptIn,
+	}
 }
 
 // requireJSONContentType rejects state-changing requests without a JSON
