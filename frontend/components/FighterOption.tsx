@@ -31,8 +31,8 @@ export const FighterOption = forwardRef<HTMLButtonElement, Props>(function Fight
         onClick={() => onPick(fighter)}
         onMouseMove={onHighlight}
         onFocus={onHighlight}
-        className={`flex w-full items-center gap-3 px-3 py-2 text-left text-ink focus-visible:outline-none disabled:opacity-40 ${
-          active ? "bg-ink text-bone" : "hover:bg-paper focus-visible:bg-paper"
+        className={`flex w-full items-center gap-3 px-3 py-2 text-left focus-visible:outline-none disabled:opacity-40 ${
+          active ? "bg-ink text-bone" : "text-ink hover:bg-paper focus-visible:bg-paper"
         }`}
       >
         <FighterPhoto name={fighter.name} url={fighter.photo_url} credit={fighter.photo_credit} size="sm" />

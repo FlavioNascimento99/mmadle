@@ -200,11 +200,34 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
         aria-expanded={open}
         aria-controls="roster-list"
         aria-haspopup="listbox"
+        aria-label={t("roster.all")}
         className={`press whitespace-nowrap border-3 border-ink px-4 py-3.5 font-mono text-xs font-bold uppercase tracking-[0.14em] disabled:opacity-50 ${
           open ? "bg-ink text-bone shadow-hard" : "bg-bone text-ink shadow-hard"
         }`}
       >
-        {t("roster.all")} <span aria-hidden="true">{open ? "▴" : "▾"}</span>
+        <span className="hidden items-center gap-2 sm:flex">
+          {t("roster.all")}
+          <span aria-hidden="true">{open ? "▴" : "▾"}</span>
+        </span>
+        <span className="flex items-center gap-1 sm:hidden">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="h-5 w-5"
+            aria-hidden="true"
+          >
+            <circle cx="4.5" cy="6" r="1.5" fill="currentColor" stroke="none" />
+            <line x1="9" y1="6" x2="20" y2="6" />
+            <circle cx="4.5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+            <line x1="9" y1="12" x2="20" y2="12" />
+            <circle cx="4.5" cy="18" r="1.5" fill="currentColor" stroke="none" />
+            <line x1="9" y1="18" x2="20" y2="18" />
+          </svg>
+          <span aria-hidden="true">{open ? "▴" : "▾"}</span>
+        </span>
       </button>
       {open && (
         <div

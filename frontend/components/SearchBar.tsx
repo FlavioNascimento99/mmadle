@@ -200,41 +200,45 @@ export function SearchBar({ pool, disabled, guessedIds, onSelect }: Props) {
         >
           ↵ ENTER
         </kbd>
+        {loading && (
+          <p className="absolute left-0 right-0 top-full z-10 mt-2 font-mono text-[11px] tracking-wide text-ash" role="status">
+            {t("search.searching")}
+          </p>
+        )}
+        {open && results.length > 0 && (
+          <ul
+            id="fighter-search-list"
+            role="listbox"
+            aria-label={t("search.matches")}
+            className="absolute left-0 right-0 top-full z-10 mt-2 max-h-80 overflow-auto border-3 border-ink bg-bone shadow-hard"
+          >
+            {query.trim().length === 1 && !loading && (
+              <li aria-hidden="true" className="border-b-2 border-ink px-4 py-2 font-mono text-[11px] tracking-wide text-ash">
+                {t("search.keepTyping")}
+              </li>
+            )}
+            {results.map((f, i) => (
+              <FighterOption
+                key={f.id}
+                ref={(el) => {
+                  optionRefs.current[i] = el;
+                }}
+                fighter={f}
+                guessed={guessedIds.has(f.id)}
+                active={activeIndex === i}
+                optionId={optionId(i)}
+                onPick={pick}
+                onHighlight={() => setActiveIndex(i)}
+              />
+            ))}
+          </ul>
+        )}
+        {open && query.trim().length >= 1 && !loading && results.length === 0 && (
+          <p className="absolute left-0 right-0 top-full z-10 mt-2 border-3 border-ink bg-bone px-3 py-2 text-sm text-ink shadow-hard">
+            {t("search.noMatch", { q: query })}
+          </p>
+        )}
       </div>
-      {loading && (
-        <p className="mt-2 font-mono text-[11px] tracking-wide text-ash" role="status">
-          {t("search.searching")}
-        </p>
-      )}
-      {open && results.length > 0 && (
-        <ul
-          id="fighter-search-list"
-          role="listbox"
-          aria-label={t("search.matches")}
-          className="absolute z-10 mt-2 max-h-80 w-full overflow-auto border-3 border-ink bg-bone shadow-hard"
-        >
-          {results.map((f, i) => (
-            <FighterOption
-              key={f.id}
-              ref={(el) => {
-                optionRefs.current[i] = el;
-              }}
-              fighter={f}
-              guessed={guessedIds.has(f.id)}
-              active={activeIndex === i}
-              optionId={optionId(i)}
-              onPick={pick}
-              onHighlight={() => setActiveIndex(i)}
-            />
-          ))}
-        </ul>
-      )}
-      {query.trim().length === 1 && !loading && results.length > 0 && (
-        <p className="mt-2 font-mono text-[11px] tracking-wide text-ash">{t("search.keepTyping")}</p>
-      )}
-      {open && query.trim().length >= 1 && !loading && results.length === 0 && (
-        <p className="mt-2 font-mono text-[11px] tracking-wide text-ash">{t("search.noMatch", { q: query })}</p>
-      )}
     </div>
   );
 }
