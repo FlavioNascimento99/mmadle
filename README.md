@@ -153,6 +153,19 @@ docker build -t mmadle-api backend
 docker run --rm -e DATABASE_URL=... mmadle-api /app/importer --seed /app/migrations/seed.sql
 ```
 
+Re-seed an existing database any time `seed.sql` changes (photos, roster,
+statuses). The seed is idempotent (`ON CONFLICT ... DO UPDATE`), so applying it
+again is safe and won't duplicate rows:
+
+```bash
+docker build -t mmadle-api backend
+docker run --rm -e DATABASE_URL='<prod-url>' mmadle-api /app/importer --seed /app/migrations/seed.sql
+```
+
+Note that `seed.sql` does **not** run on container boot — deployments apply
+migrations only, so data changes landed in `seed.sql` must be pushed to the DB
+with the importer above.
+
 Docker Compose is unaffected: the frontend image sets `NEXT_OUTPUT=standalone`
 to build the `next start` server instead of the static export.
 
