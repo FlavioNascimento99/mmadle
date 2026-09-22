@@ -86,12 +86,12 @@ func TestAdminUsersValidation(t *testing.T) {
 		t.Fatalf("GET toggle status=%d want 405", rec.Code)
 	}
 	for body, want := range map[string]int{
-		`{"user_id":0,"active":false}`:   http.StatusBadRequest,
-		`{"user_id":-3,"active":false}`:  http.StatusBadRequest,
-		`{"active":false}`:               http.StatusBadRequest, // user_id 0
-		`{"user_id":2}`:                  http.StatusOK,         // active defaults false
-		`{"user_id":2,"admin":true}`:     http.StatusBadRequest, // unknown field
-		`{bad`:                           http.StatusBadRequest,
+		`{"user_id":0,"active":false}`:  http.StatusBadRequest,
+		`{"user_id":-3,"active":false}`: http.StatusBadRequest,
+		`{"active":false}`:              http.StatusBadRequest, // user_id 0
+		`{"user_id":2}`:                 http.StatusOK,         // active defaults false
+		`{"user_id":2,"admin":true}`:    http.StatusBadRequest, // unknown field
+		`{bad`:                          http.StatusBadRequest,
 	} {
 		rec := postAuth(srv, "/api/admin/users/active", body, admin)
 		if rec.Code != want {

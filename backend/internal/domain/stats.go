@@ -97,9 +97,7 @@ func ComputeStats(games []GameSummary, today string) UserStats {
 		if i >= 10 {
 			break
 		}
-		out.RecentGames = append(out.RecentGames, RecentGame{
-			Date: g.Date, Pool: g.Pool, Guesses: g.Guesses, Won: g.Won,
-		})
+		out.RecentGames = append(out.RecentGames, RecentGame(g))
 	}
 	if out.RecentGames == nil {
 		out.RecentGames = []RecentGame{}
