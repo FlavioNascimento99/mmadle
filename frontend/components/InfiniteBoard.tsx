@@ -158,22 +158,22 @@ export function InfiniteBoard({ user }: { user: AuthUser | null }) {
     <div className="space-y-6">
       <ModeToggle pool={pool} disabled={submitting || starting} onChange={setPool} />
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-2 border-bone/15 bg-coal px-4 py-3">
         <Lives left={lives} />
-        <p className="text-sm text-steel" aria-live="polite">
+        <p className="font-mono text-xs tracking-wide text-steel" aria-live="polite">
           {t("inf.streakLine", { n: streak, m: best })}
           {newBest && <span className="ml-2 font-bold text-blood">{t("inf.newBest")}</span>}
         </p>
-        <p className="text-xs text-steel">{user ? t("inf.bestAccount") : t("inf.bestGuest")}</p>
+        <p className="font-mono text-[11px] tracking-wide text-ash">{user ? t("inf.bestAccount") : t("inf.bestGuest")}</p>
       </div>
 
       {starting ? (
-        <p className="text-sm text-steel" role="status">
+        <p className="font-mono text-xs tracking-wide text-ash" role="status">
           {t("inf.starting")}
         </p>
       ) : (
         !roundOver && (
-          <div className="flex items-start gap-2">
+          <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
               <SearchBar key={pool} pool={pool} disabled={false} guessedIds={guessedIds} onSelect={onSelect} />
             </div>
@@ -183,22 +183,22 @@ export function InfiniteBoard({ user }: { user: AuthUser | null }) {
       )}
 
       {submitting && (
-        <p className="text-sm text-steel" role="status">
+        <p className="font-mono text-[11px] tracking-wide text-ash" role="status">
           {t("board.evaluating")}
         </p>
       )}
       {error && (
-        <p className="border-3 border-blood bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
+        <p className="border-2 border-ink bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
           {error}
         </p>
       )}
 
       {solved && (
-        <div className="border-3 border-bone bg-blood px-4 py-3 text-bone shadow-blood" role="status">
-          <p className="font-display text-2xl uppercase">{t("inf.solved")}</p>
+        <div className="animate-pop-in border-3 border-ink bg-bone px-4 py-3 text-ink shadow-hard" role="status">
+          <p className="microlabel text-blood">{t("inf.solved")}</p>
           <button
             onClick={() => void start(pool)}
-            className="press mt-2 border-3 border-bone bg-ink px-4 py-2 font-semibold text-bone"
+            className="press mt-2 border-2 border-ink bg-ink px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.14em] text-bone"
           >
             {t("inf.next")}
           </button>
@@ -206,8 +206,8 @@ export function InfiniteBoard({ user }: { user: AuthUser | null }) {
       )}
 
       {!solved && roundOver && answer && (
-        <div className="border-3 border-ink bg-bone p-4 text-ink shadow-blood-lg" role="status">
-          <p className="font-display text-2xl uppercase text-blood">{t("inf.dead")}</p>
+        <div className="animate-pop-in border-3 border-ink bg-bone p-4 text-ink shadow-hard" role="status">
+          <p className="microlabel text-blood">{t("inf.dead")}</p>
           <div className="mt-3 flex items-center gap-3">
             <FighterPhoto name={answer.name} url={answer.photo_url} credit={answer.photo_credit} size="md" />
             <p className="font-display text-3xl uppercase leading-none">
@@ -216,7 +216,7 @@ export function InfiniteBoard({ user }: { user: AuthUser | null }) {
           </div>
           <button
             onClick={() => void start(pool)}
-            className="press mt-3 border-3 border-ink bg-ink px-4 py-2 font-semibold text-bone"
+            className="press mt-3 border-2 border-ink bg-ink px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.14em] text-bone"
           >
             {t("inf.retry")}
           </button>
@@ -224,7 +224,7 @@ export function InfiniteBoard({ user }: { user: AuthUser | null }) {
       )}
 
       {guesses.length > 0 && (
-        <p className="text-sm text-steel" aria-live="polite">
+        <p className="text-center font-mono text-xs tracking-wide text-ash" aria-live="polite">
           {t("board.guesses")} <span className="font-display text-xl text-bone">{guesses.length}</span>
         </p>
       )}

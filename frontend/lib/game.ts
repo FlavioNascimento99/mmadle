@@ -36,7 +36,7 @@ export function comparisonMeta(comparison: Comparison, lang: Lang = "en"): {
       return {
         symbol: "✗",
         label: d["cmp.incorrect"],
-        classes: "bg-ink text-steel",
+        classes: "bg-ink/[0.05] text-ash",
       };
   }
 }

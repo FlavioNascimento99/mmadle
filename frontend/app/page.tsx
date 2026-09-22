@@ -77,25 +77,27 @@ function Home() {
         }}
         onSignOut={() => void logout()}
       />
-      <main className="mx-auto max-w-5xl space-y-8 px-4 py-8">
-        <div className="flex border-3 border-bone" role="group" aria-label={t("mode.group")}>
-          {(["daily", "infinite"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              aria-pressed={mode === m}
-              className={`px-4 py-2 font-display text-lg uppercase tracking-wide ${
-                mode === m ? "bg-blood text-bone" : "bg-ink text-steel"
-              }`}
-            >
-              {t(m === "daily" ? "mode.daily" : "mode.infinite")}
-            </button>
-          ))}
+      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:py-8">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex border-2 border-bone/25" role="group" aria-label={t("mode.group")}>
+            {(["daily", "infinite"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                aria-pressed={mode === m}
+                className={`px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-[0.18em] ${
+                  mode === m ? "bg-blood text-bone" : "bg-transparent text-steel hover:text-bone"
+                }`}
+              >
+                {t(m === "daily" ? "mode.daily" : "mode.infinite")}
+              </button>
+            ))}
+          </div>
         </div>
         <section aria-label={mode === "daily" ? t("board.dailyGame") : t("mode.infinite")}>
           {mode === "daily" ? <GameBoard user={user} /> : <InfiniteBoard user={user} />}
         </section>
-        <footer className="border-t-2 border-bone/20 pt-4 text-xs text-steel">
+        <footer className="border-t border-bone/15 pt-4 font-mono text-[11px] leading-relaxed tracking-wide text-ash">
           {t("board.footer")}
         </footer>
       </main>
