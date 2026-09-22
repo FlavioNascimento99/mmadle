@@ -200,14 +200,16 @@ export function RosterList({ pool, disabled, guessedIds, onSelect }: Props) {
         aria-expanded={open}
         aria-controls="roster-list"
         aria-haspopup="listbox"
-        className="press w-full border-3 border-ink bg-blood px-4 py-3.5 text-lg font-bold text-bone shadow-[4px_4px_0_0_#FAFAF7] disabled:opacity-50"
+        className={`press whitespace-nowrap border-3 border-ink px-4 py-3.5 font-mono text-xs font-bold uppercase tracking-[0.14em] disabled:opacity-50 ${
+          open ? "bg-ink text-bone shadow-hard" : "bg-bone text-ink shadow-hard"
+        }`}
       >
         {t("roster.all")} <span aria-hidden="true">{open ? "▴" : "▾"}</span>
       </button>
       {open && (
         <div
           id="roster-list"
-          className="absolute right-0 z-10 mt-2 w-[min(28rem,calc(100vw-2rem))] overflow-hidden border-3 border-ink bg-bone text-ink shadow-blood-lg"
+          className="absolute right-0 z-10 mt-2 w-[min(28rem,calc(100vw-2rem))] overflow-hidden border-3 border-ink bg-bone text-ink shadow-hard"
         >
           {error ? (
             <p className="px-4 py-3 text-sm font-semibold text-blood" role="alert">

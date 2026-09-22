@@ -27,7 +27,7 @@ export function HintPanel({ pool, guessCount }: Props) {
 
   if (failed) {
     return (
-      <p className="text-sm text-steel" role="alert">
+      <p className="font-mono text-[11px] tracking-wide text-ash" role="alert">
         {t("hints.unavailable")}
       </p>
     );
@@ -37,19 +37,19 @@ export function HintPanel({ pool, guessCount }: Props) {
   const remaining = hints.next_at === null ? 0 : hints.next_at - guessCount;
 
   return (
-    <section aria-label={t("hints.title")} aria-live="polite" className="space-y-3">
+    <section aria-label={t("hints.title")} aria-live="polite" className="space-y-2">
       {hints.hints.length > 0 && (
-        <ul className="flex flex-wrap gap-3">
+        <ul className="flex flex-wrap gap-2">
           {hints.hints.map((hint) => (
-            <li key={hint.kind} className="border-3 border-ink bg-bone px-3 py-2 text-ink shadow-blood">
-              <span className="block text-xs font-bold uppercase tracking-wide text-bruise">{hint.label}</span>
-              <span className="block font-display text-xl uppercase leading-tight">{hint.value}</span>
+            <li key={hint.kind} className="border-2 border-ink bg-paper px-3 py-1.5 text-ink shadow-hard-sm">
+              <span className="microlabel block text-bruise">{hint.label}</span>
+              <span className="block font-display text-lg uppercase leading-tight tracking-wide">{hint.value}</span>
             </li>
           ))}
         </ul>
       )}
       {remaining > 0 && (
-        <p className="text-sm text-steel">
+        <p className="font-mono text-[11px] tracking-wide text-ash">
           {t("hints.next", { n: remaining, unit: t(remaining === 1 ? "hints.guessOne" : "hints.guessMany") })}
         </p>
       )}

@@ -156,7 +156,7 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
   }, [guesses, gameDate, pool, t]);
 
   if (!ready) {
-    return <p className="text-sm text-steel">{t("board.loading")}</p>;
+    return <p className="font-mono text-xs tracking-wide text-ash">{t("board.loading")}</p>;
   }
 
   return (
@@ -164,7 +164,7 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
       <ModeToggle pool={pool} disabled={submitting} onChange={setPool} />
       <DailySolvers pool={pool} refreshKey={guesses.length} guessCount={guesses.length} won={won} />
 
-      <div className="flex items-start gap-2">
+      <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
           <SearchBar key={pool} pool={pool} disabled={won} guessedIds={guessedIds} onSelect={onSelect} />
         </div>
@@ -172,12 +172,12 @@ export function GameBoard({ user }: { user: AuthUser | null }) {
       </div>
 
       {submitting && (
-        <p className="text-sm text-steel" role="status">
+        <p className="font-mono text-[11px] tracking-wide text-ash" role="status">
           {t("board.evaluating")}
         </p>
       )}
       {error && (
-        <p className="border-3 border-blood bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
+        <p className="border-2 border-ink bg-bruise px-3 py-2 text-sm font-semibold text-bone" role="alert">
           {error}
         </p>
       )}
