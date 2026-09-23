@@ -6,7 +6,7 @@ import { FighterPhoto } from "./FighterPhoto";
 type Props = {
   fighter: SearchResult;
   guessed: boolean;
-  /** Keyboard/mouse highlight (mirrors focus). */
+  /** Keyboard highlight (mirrors focus). */
   active?: boolean;
   optionId?: string;
   onPick: (fighter: SearchResult) => void;
